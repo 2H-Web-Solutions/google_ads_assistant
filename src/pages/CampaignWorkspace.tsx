@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical } from 'lucide-react';
-import { onSnapshot, doc, collection, addDoc, query, orderBy, serverTimestamp, where } from 'firebase/firestore';
-import { getAppDoc, getAppCollection } from '../lib/db';
+import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 
 export default function CampaignWorkspace() {
     const { clientId, campaignId } = useParams();
@@ -25,11 +25,12 @@ export default function CampaignWorkspace() {
         return () => unsub();
     }, [clientId, campaignId]);
 
-    // 2. Load Smart Archive (Chat History)
+    // 2. Load Smart Archive (Chat History from SESSION)
     useEffect(() => {
         if (!clientId || !campaignId) return;
+        // Global Session Path: apps/{APP_ID}/sessions/{SESSION_ID}/messages
         const q = query(
-            getAppCollection(`clients/${clientId}/campaigns/${campaignId}/chat_history`),
+            getAppCollection(`sessions/${campaignId}/messages`),
             orderBy('createdAt', 'asc')
         );
         const unsub = onSnapshot(q, (snapshot) => {
@@ -49,14 +50,24 @@ export default function CampaignWorkspace() {
         setLoading(true);
 
         try {
-            // A. Save User Message to Archive
-            await addDoc(getAppCollection(`clients/${clientId}/campaigns/${campaignId}/chat_history`), {
+            // A. Save User Message to Session Archive
+            await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
                 role: 'user',
                 content: userText,
                 createdAt: serverTimestamp()
             });
 
-            // B. Simulate AI Processing (This is where n8n would take over)
+            // B. Update Session Metadata (Bubbles to Central Hub)
+            await setDoc(getAppDoc('sessions', campaignId), {
+                agentName: "Ads Creator",
+                appId: APP_ID,
+                clientId: clientId, // Context for deep link
+                campaignId: campaignId, // Context for deep link
+                lastMessage: userText,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            // C. Simulate AI Processing
             // We will implement a client-side "Task Detector" for immediate feedback
             setTimeout(async () => {
                 let aiResponse = "I've updated the campaign context.";
@@ -75,7 +86,8 @@ export default function CampaignWorkspace() {
                         related_campaign_id: campaignId,
                         due_date: dueDate.toISOString(),
                         status: 'Pending',
-                        createdAt: serverTimestamp()
+                        createdAt: serverTimestamp(),
+                        sourceAppId: APP_ID // Tag source for Global Task Center
                     });
 
                     aiResponse = "I've created a task for you to check this campaign in 2 weeks. You can see it in the Tasks sidebar.";
@@ -84,12 +96,18 @@ export default function CampaignWorkspace() {
                     aiResponse = `Based on the CSV memory, this campaign has ${campaign.memory_base.length} bytes of data. It focuses on imported keywords.`;
                 }
 
-                // C. Save AI Response to Archive
-                await addDoc(getAppCollection(`clients/${clientId}/campaigns/${campaignId}/chat_history`), {
+                // D. Save AI Response to Archive
+                await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
                     role: 'assistant',
                     content: aiResponse,
                     createdAt: serverTimestamp()
                 });
+
+                // E. Update Session Metadata again
+                await setDoc(getAppDoc('sessions', campaignId), {
+                    lastMessage: aiResponse,
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
 
                 setLoading(false);
             }, 1000);
@@ -144,8 +162,8 @@ export default function CampaignWorkspace() {
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[80%] rounded-2xl p-4 text-sm font-['Barlow'] leading-relaxed shadow-sm ${msg.role === 'user'
-                                    ? 'bg-[#101010] text-white rounded-br-none'
-                                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
+                                ? 'bg-[#101010] text-white rounded-br-none'
+                                : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
                                 }`}>
                                 {msg.content}
                             </div>
