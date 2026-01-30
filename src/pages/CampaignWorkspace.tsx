@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical } from 'lucide-react';
 import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
-import { getGeminiResponse } from '../lib/gemini';
+import { runGemini } from '../lib/gemini';
 
 export default function CampaignWorkspace() {
     const { clientId, campaignId } = useParams();
@@ -68,15 +68,18 @@ export default function CampaignWorkspace() {
                 updatedAt: serverTimestamp()
             }, { merge: true });
 
-            // C. Call Gemini AI
-            const history = messages.map(m => ({
-                role: m.role === 'assistant' ? 'model' as const : 'user' as const,
-                parts: [{ text: m.content }]
-            }));
-            const context = campaign.memory_base || "";
+            // C. Call Gemini AI (Stateless)
+            const context = campaign.memory_base || "No specific data context.";
+
+            // Construct Prompt manually
+            const systemPrompt = `You are the "2H Web Solutions Google Ads Assistant".\nAnalyze campaign data and give strategic tips.\nContext: ${context}\n`;
+
+            const historyText = messages.map(m => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.content}`).join('\n');
+
+            const fullPrompt = `${systemPrompt}\nChat History:\n${historyText}\nUser: ${userText}\nAI:`;
 
             try {
-                const aiResponse = await getGeminiResponse(userText, history, context);
+                const aiResponse = await runGemini(fullPrompt);
 
                 // D. Save AI Response to Archive
                 await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
