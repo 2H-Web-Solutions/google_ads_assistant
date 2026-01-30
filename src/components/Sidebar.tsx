@@ -4,6 +4,8 @@ import { LayoutDashboard, Users, CheckSquare, Settings, LogOut } from 'lucide-re
 import { useAuth } from '../context/AuthContext';
 import { getAuth, signOut } from 'firebase/auth';
 
+import logo from '../assets/logo.png';
+
 const Sidebar = () => {
     const { user } = useAuth();
     const auth = getAuth();
@@ -18,13 +20,16 @@ const Sidebar = () => {
     return (
         <div className="h-screen w-64 bg-[#101010] text-white flex flex-col fixed left-0 top-0 border-r border-gray-800 z-50">
             {/* Header */}
-            <div className="p-6 border-b border-gray-800">
+            <div className="p-6 border-b border-gray-800 flex flex-col gap-4">
                 <img
-                    src="/assets/logo.png"
+                    src={logo}
                     alt="2H Web Solutions"
-                    className="h-10 w-auto object-contain"
+                    className="h-12 w-auto object-contain self-start"
                 />
-                <p className="text-xs text-gray-500 font-['Barlow'] mt-2">Workspace v1.0</p>
+                <div>
+                    <h1 className="text-xl font-['Federo'] text-white leading-none">Google Ads</h1>
+                    <h1 className="text-xl font-['Federo'] text-[#B7EF02] leading-none">Assistant</h1>
+                </div>
             </div>
 
             {/* Navigation */}
