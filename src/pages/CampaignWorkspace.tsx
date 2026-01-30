@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical } from 'lucide-react';
 import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
-import { runGemini } from '../lib/gemini';
+import { getGeminiResponse } from '../lib/gemini';
 
 export default function CampaignWorkspace() {
     const { clientId, campaignId } = useParams();
@@ -79,7 +79,7 @@ export default function CampaignWorkspace() {
             const fullPrompt = `${systemPrompt}\nChat History:\n${historyText}\nUser: ${userText}\nAI:`;
 
             try {
-                const aiResponse = await runGemini(fullPrompt);
+                const aiResponse = await getGeminiResponse(fullPrompt);
 
                 // D. Save AI Response to Archive
                 await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
