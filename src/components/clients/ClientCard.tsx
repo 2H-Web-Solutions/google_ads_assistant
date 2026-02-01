@@ -22,7 +22,12 @@ export default function ClientCard({ client, onDelete }: ClientCardProps) {
                 const coll = getAppCollection(`clients/${client.id}/campaigns`);
                 // Use getDocs to get actual data, not just count
                 const snapshot = await getDocs(coll);
-                const campData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                // CRITICAL: Explicitly capture ID first, or overwrite. User requested specific logic.
+                const campData = snapshot.docs.map(d => ({
+                    id: d.id, // Explicit ID
+                    ...d.data()
+                }));
+                console.log(`Loaded campaigns for client ${client.id}:`, campData); // Safety Check
                 setCampaigns(campData);
             } catch (error) {
                 console.error("Error fetching campaigns:", error);
@@ -133,7 +138,11 @@ export default function ClientCard({ client, onDelete }: ClientCardProps) {
                                 key={camp.id}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    navigate(`/campaigns/${camp.id}`);  // Corrected: Direct to campaign route
+                                    if (camp.id) {
+                                        navigate(`/campaigns/${camp.id}`);
+                                    } else {
+                                        console.error("Campaign ID missing:", camp);
+                                    }
                                 }}
                                 className="px-3 py-2 text-sm text-gray-600 hover:bg-white hover:text-[#B7EF02] cursor-pointer flex items-center justify-between transition-colors font-['Barlow']"
                             >
