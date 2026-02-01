@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ExternalLink, Briefcase, Trash2 } from 'lucide-react';
+import { Plus, Briefcase } from 'lucide-react';
 import { onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { getAppCollection, getAppDoc, type Client } from '../lib/db';
 import ClientAssistant from '../components/ClientAssistant';
+import ClientCard from '../components/clients/ClientCard';
 import { DeleteConfirmationModal } from '../components/ui/DeleteConfirmationModal';
 
 export default function Clients() {
-    const navigate = useNavigate();
+    // navigate is used in ClientCard, not here anymore directly in map
+    // const navigate = useNavigate();
     const [clients, setClients] = useState<Client[]>([]);
     const [showAssistant, setShowAssistant] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -84,41 +86,11 @@ export default function Clients() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {clients.map((client) => (
-                        <div
+                        <ClientCard
                             key={client.id}
-                            onClick={() => navigate(`/clients/${client.id}`)}
-                            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow group cursor-pointer"
-                        >
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="w-12 h-12 rounded-lg bg-[#F0F0F3] flex items-center justify-center text-xl font-['Federo'] text-gray-700">
-                                    {client.name.substring(0, 1)}
-                                </div>
-                                <div className="flex gap-2">
-                                    <a
-                                        href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-gray-400 hover:text-[#B7EF02] transition-colors"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        <ExternalLink size={18} />
-                                    </a>
-                                    <button
-                                        onClick={(e) => handleDeleteClick(e, client)}
-                                        className="text-gray-400 hover:text-red-500 transition-colors"
-                                    >
-                                        <Trash2 size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                            <h3 className="text-xl font-['Federo'] text-gray-900 mb-1">{client.name}</h3>
-                            <p className="text-sm text-gray-500 font-['Barlow'] mb-4 truncate">{client.website}</p>
-
-                            <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
-                                <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded">ACTIVE</span>
-                                <span className="text-xs text-gray-400">Campaigns: 0</span>
-                            </div>
-                        </div>
+                            client={client}
+                            onDelete={(e) => handleDeleteClick(e, client)}
+                        />
                     ))}
                 </div>
             )}
