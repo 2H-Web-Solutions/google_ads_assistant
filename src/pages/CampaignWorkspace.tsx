@@ -1,8 +1,8 @@
 // src/pages/CampaignWorkspace.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical, Archive } from 'lucide-react';
-import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc, getDocs, deleteDoc } from 'firebase/firestore';
+import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical, Archive, Pencil, Check, X } from 'lucide-react';
+import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 import { getGeminiResponse } from '../lib/gemini';
 import CampaignMemory from '../components/CampaignMemory';
@@ -47,16 +47,23 @@ export default function CampaignWorkspace() {
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [showMemory, setShowMemory] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedName, setEditedName] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // 1. Load Campaign Data
     useEffect(() => {
         if (!clientId || !campaignId) return;
         const unsub = onSnapshot(getAppDoc(`clients/${clientId}/campaigns`, campaignId), (doc) => {
-            if (doc.exists()) setCampaign({ id: doc.id, ...doc.data() });
+            if (doc.exists()) {
+                const data = doc.data();
+                setCampaign({ id: doc.id, ...data });
+                // Only set editedName if we are not currently editing, to avoid overwriting user input
+                if (!isEditing) setEditedName(data.name);
+            }
         });
         return () => unsub();
-    }, [clientId, campaignId]);
+    }, [clientId, campaignId, isEditing]);
 
     // 2. Load Smart Archive
     useEffect(() => {
@@ -193,6 +200,32 @@ export default function CampaignWorkspace() {
         }
     };
 
+    // 5. Campaign Renaming Logic
+    const startEditing = () => {
+        setIsEditing(true);
+        if (campaign) setEditedName(campaign.name);
+    };
+
+    const cancelEditing = () => {
+        setIsEditing(false);
+        if (campaign) setEditedName(campaign.name);
+    };
+
+    const saveName = async () => {
+        if (!editedName.trim() || !clientId || !campaignId) return;
+        try {
+            await updateDoc(getAppDoc(`clients/${clientId}/campaigns`, campaignId), {
+                name: editedName
+            });
+            // Update local state immediately for better UX
+            setCampaign((prev: any) => ({ ...prev, name: editedName }));
+            setIsEditing(false);
+        } catch (error) {
+            console.error("Error updating campaign name:", error);
+            alert("Failed to rename campaign.");
+        }
+    };
+
     if (!campaign) return <div className="p-8">Loading Workspace...</div>;
 
     return (
@@ -207,7 +240,34 @@ export default function CampaignWorkspace() {
                             <ArrowLeft size={20} />
                         </button>
                         <div>
-                            <h1 className="font-['Federo'] text-xl text-gray-900">{campaign.name}</h1>
+                            {isEditing ? (
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={editedName}
+                                        onChange={(e) => setEditedName(e.target.value)}
+                                        className="font-['Federo'] text-xl text-gray-900 bg-transparent border-b-2 border-[#B7EF02] focus:outline-none w-full min-w-[200px]"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') saveName();
+                                            if (e.key === 'Escape') cancelEditing();
+                                        }}
+                                    />
+                                    <button onClick={saveName} className="p-1 hover:bg-green-100 text-green-600 rounded transition-colors"><Check size={18} /></button>
+                                    <button onClick={cancelEditing} className="p-1 hover:bg-red-100 text-red-500 rounded transition-colors"><X size={18} /></button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 group">
+                                    <h1 className="font-['Federo'] text-xl text-gray-900">{campaign.name}</h1>
+                                    <button
+                                        onClick={startEditing}
+                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 text-gray-400 hover:text-gray-600 rounded transition-all"
+                                        title="Rename Campaign"
+                                    >
+                                        <Pencil size={14} />
+                                    </button>
+                                </div>
+                            )}
                             <div className="flex items-center gap-2 text-xs text-gray-500 font-['Barlow']">
                                 <span className="w-2 h-2 rounded-full bg-green-500"></span>
                                 <span>Active Assistant</span>
