@@ -1,10 +1,11 @@
 // src/pages/CampaignWorkspace.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical } from 'lucide-react';
-import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
+import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical, Archive } from 'lucide-react';
+import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 import { getGeminiResponse } from '../lib/gemini';
+import CampaignMemory from '../components/CampaignMemory';
 
 // --- HELPER COMPONENT: Message Formatter ---
 // Parses **bold** and handles newlines/lists without extra dependencies
@@ -71,7 +72,49 @@ export default function CampaignWorkspace() {
         return () => unsub();
     }, [clientId, campaignId]);
 
-    // 3. Handle Sending Messages
+    // 3. Handle Smart Archive
+    const handleSmartArchive = async () => {
+        if (!messages.length || !clientId || !campaignId) return;
+
+        const confirmArchive = confirm("Archive current chat session to Knowledge Base? This will clear the chat view.");
+        if (!confirmArchive) return;
+
+        setLoading(true);
+        try {
+            // 1. Save to Knowledge Base
+            const archiveContent = JSON.stringify(messages.map(m => ({ role: m.role, content: m.content, time: m.createdAt })));
+            await addDoc(getAppCollection(`clients/${clientId}/campaigns/${campaignId}/knowledge_base`), {
+                type: 'chat_archive',
+                title: `Chat Session ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+                content: archiveContent,
+                fileName: 'chat_archive.json', // for consistency
+                createdAt: serverTimestamp()
+            });
+
+            // 2. Clear Messages from 'sessions/{campaignId}/messages'
+            // We need to delete them individually as there is no "delete collection" in client SDK
+            // Using a batch would be better but simple iteration works for small chats
+            await Promise.all(messages.map(msg =>
+                deleteDoc(getAppDoc(`sessions/${campaignId}/messages`, msg.id))
+            ));
+
+            // 3. Reset Session Metadata
+            await setDoc(getAppDoc('sessions', campaignId), {
+                lastMessage: "Session Archived",
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            alert("Chat archived to memory.");
+
+        } catch (error) {
+            console.error("Error archiving chat:", error);
+            alert("Failed to archive chat.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 4. Handle Sending Messages (Enhanced with Context)
     const handleSend = async () => {
         if (!input.trim() || !clientId || !campaignId) return;
 
@@ -95,12 +138,32 @@ export default function CampaignWorkspace() {
                 updatedAt: serverTimestamp()
             }, { merge: true });
 
-            const context = campaign.memory_base || "No specific data context.";
+            // --- FETCH KNOWLEDGE BASE CONTEXT ---
+            let contextString = "";
+            try {
+                const kbPath = `clients/${clientId}/campaigns/${campaignId}/knowledge_base`;
+                const kbSnapshot = await getDocs(getAppCollection(kbPath)); // Requires getDocs import
+
+                if (!kbSnapshot.empty) {
+                    const kbContent = kbSnapshot.docs.map(d => {
+                        const data = d.data();
+                        return `[Type: ${data.type}] content: ${data.content}`;
+                    }).join('\n---\n');
+                    contextString = `REFERENCE DATA (Knowledge Base):\n${kbContent}\n`;
+                }
+            } catch (err) {
+                console.error("Error fetching knowledge base context:", err);
+            }
+
+            const baseContext = campaign.memory_base || "No specific data context.";
+            // Combine: Base Context + Knowledge Base + Chat History
+            const combinedContext = `${baseContext}\n\n${contextString}`;
+
             const historyText = messages.map(m => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.content}`).join('\n');
             const fullPrompt = `Chat History:\n${historyText}\nUser: ${userText}`;
 
             try {
-                const aiResponse = await getGeminiResponse(fullPrompt, 'ASSISTANT', context);
+                const aiResponse = await getGeminiResponse(fullPrompt, 'ASSISTANT', combinedContext);
 
                 await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
                     role: 'assistant',
@@ -152,6 +215,13 @@ export default function CampaignWorkspace() {
                         </div>
                     </div>
                     <div className="flex gap-2">
+                        <button
+                            onClick={handleSmartArchive}
+                            className="p-2 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-[#B7EF02] transition-colors"
+                            title="Smart Archive (Save & Clear)"
+                        >
+                            <Archive size={20} />
+                        </button>
                         <button
                             onClick={() => setShowMemory(!showMemory)}
                             className={`p-2 rounded-lg transition-colors ${showMemory ? 'bg-[#B7EF02] text-black' : 'hover:bg-gray-200 text-gray-500'}`}
@@ -213,31 +283,9 @@ export default function CampaignWorkspace() {
 
             {/* RIGHT: Memory & Context Panel (Collapsible) */}
             {showMemory && (
-                <div className="w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-                    <div className="p-4 border-b border-gray-200 bg-gray-50">
-                        <h3 className="font-['Federo'] text-gray-900">Memory Base</h3>
-                    </div>
-                    <div className="p-4 overflow-y-auto flex-1">
-                        <div className="mb-6">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Source Data</h4>
-                            <div className="p-3 bg-gray-50 rounded border border-gray-100 text-xs font-mono text-gray-600 break-all">
-                                {campaign.memory_base ? campaign.memory_base.substring(0, 200) + '...' : 'No CSV Data Loaded'}
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Campaign Stats</h4>
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Status</span>
-                                    <span className="font-medium">{campaign.status}</span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-gray-600">Created</span>
-                                    <span className="font-medium">{campaign.createdAt?.toDate().toLocaleDateString()}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div className="w-80 overflow-hidden animate-in slide-in-from-right duration-300">
+                    {/* Pass clientId and campaignId (fallback to empty string if undefined to satisfy types, though useEffect guards against it) */}
+                    <CampaignMemory clientId={clientId || ''} campaignId={campaignId || ''} />
                 </div>
             )}
         </div>
