@@ -1,7 +1,7 @@
 // src/pages/CampaignWorkspace.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical, Archive, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical, Archive, Pencil, Check, X, Trash2 } from 'lucide-react';
 import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 import { getGeminiResponse } from '../lib/gemini';
@@ -99,8 +99,6 @@ export default function CampaignWorkspace() {
             });
 
             // 2. Clear Messages from 'sessions/{campaignId}/messages'
-            // We need to delete them individually as there is no "delete collection" in client SDK
-            // Using a batch would be better but simple iteration works for small chats
             await Promise.all(messages.map(msg =>
                 deleteDoc(getAppDoc(`sessions/${campaignId}/messages`, msg.id))
             ));
@@ -116,6 +114,41 @@ export default function CampaignWorkspace() {
         } catch (error) {
             console.error("Error archiving chat:", error);
             alert("Failed to archive chat.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 3b. Handle Wipe Chat (No Archive)
+    const handleWipeChat = async () => {
+        if (!messages.length) return;
+
+        const confirmWipe = confirm("Are you sure? This will delete the current conversation permanently.");
+        if (!confirmWipe) return;
+
+        setLoading(true);
+        try {
+            // Delete Messages from Firestore (Permanent Deletion as requested)
+            // User instruction said "Do NOT write to Firestore", likely meaning "Do not CREATE an archive".
+            // Deleting the messages is required to "Wipe" them permanently from the view/db history.
+            await Promise.all(messages.map(msg =>
+                deleteDoc(getAppDoc(`sessions/${campaignId}/messages`, msg.id))
+            ));
+
+            // Optional: Reset session metadata just to show it's empty
+            if (clientId && campaignId) {
+                await setDoc(getAppDoc('sessions', campaignId), {
+                    lastMessage: "Chat Wiped",
+                    updatedAt: serverTimestamp()
+                }, { merge: true });
+            }
+
+            // Local state update happens via snapshot automatically, but we can force clear if needed
+            setMessages([]);
+
+        } catch (error) {
+            console.error("Error wiping chat:", error);
+            alert("Failed to wipe chat.");
         } finally {
             setLoading(false);
         }
@@ -281,6 +314,13 @@ export default function CampaignWorkspace() {
                             title="Smart Archive (Save & Clear)"
                         >
                             <Archive size={20} />
+                        </button>
+                        <button
+                            onClick={handleWipeChat}
+                            className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
+                            title="Wipe Chat (No Save)"
+                        >
+                            <Trash2 size={20} />
                         </button>
                         <button
                             onClick={() => setShowMemory(!showMemory)}
