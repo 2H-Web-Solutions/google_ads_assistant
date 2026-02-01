@@ -1,9 +1,40 @@
+// src/pages/CampaignWorkspace.tsx
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send, CheckSquare, Brain, Clock, MoreVertical } from 'lucide-react';
 import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 import { getGeminiResponse } from '../lib/gemini';
+
+// --- HELPER COMPONENT: Message Formatter ---
+// Parses **bold** and handles newlines/lists without extra dependencies
+const FormattedMessage = ({ text, isUser }: { text: string, isUser: boolean }) => {
+    if (!text) return null;
+
+    return (
+        <div className="space-y-1 text-sm leading-relaxed">
+            {text.split('\n').map((line, i) => {
+                const trimmed = line.trim();
+                // Identify list items for indentation
+                const isList = /^\d+\.|^[\*-]/.test(trimmed);
+
+                // Parse **Bold** text
+                const parts = line.split(/(\*\*.*?\*\*)/g);
+
+                return (
+                    <div key={i} className={`${isList ? 'pl-4' : ''} min-h-[1.25rem]`}>
+                        {parts.map((part, j) => {
+                            if (part.startsWith('**') && part.endsWith('**')) {
+                                return <strong key={j} className={isUser ? "font-bold text-white" : "font-bold text-gray-900"}>{part.slice(2, -2)}</strong>;
+                            }
+                            return <span key={j}>{part}</span>;
+                        })}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
 export default function CampaignWorkspace() {
     const { clientId, campaignId } = useParams();
@@ -17,7 +48,7 @@ export default function CampaignWorkspace() {
     const [showMemory, setShowMemory] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // 1. Load Campaign Data (The Memory Base)
+    // 1. Load Campaign Data
     useEffect(() => {
         if (!clientId || !campaignId) return;
         const unsub = onSnapshot(getAppDoc(`clients/${clientId}/campaigns`, campaignId), (doc) => {
@@ -26,23 +57,21 @@ export default function CampaignWorkspace() {
         return () => unsub();
     }, [clientId, campaignId]);
 
-    // 2. Load Smart Archive (Chat History from SESSION)
+    // 2. Load Smart Archive
     useEffect(() => {
         if (!clientId || !campaignId) return;
-        // Global Session Path: apps/{APP_ID}/sessions/{SESSION_ID}/messages
         const q = query(
             getAppCollection(`sessions/${campaignId}/messages`),
             orderBy('createdAt', 'asc')
         );
         const unsub = onSnapshot(q, (snapshot) => {
             setMessages(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-            // Scroll to bottom on new message
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
         });
         return () => unsub();
     }, [clientId, campaignId]);
 
-    // 3. Handle Sending Messages & Task Logic
+    // 3. Handle Sending Messages
     const handleSend = async () => {
         if (!input.trim() || !clientId || !campaignId) return;
 
@@ -51,42 +80,34 @@ export default function CampaignWorkspace() {
         setLoading(true);
 
         try {
-            // A. Save User Message to Session Archive
             await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
                 role: 'user',
                 content: userText,
                 createdAt: serverTimestamp()
             });
 
-            // B. Update Session Metadata (Bubbles to Central Hub)
             await setDoc(getAppDoc('sessions', campaignId), {
                 agentName: "Ads Creator",
                 appId: APP_ID,
-                clientId: clientId, // Context for deep link
-                campaignId: campaignId, // Context for deep link
+                clientId: clientId,
+                campaignId: campaignId,
                 lastMessage: userText,
                 updatedAt: serverTimestamp()
             }, { merge: true });
 
-            // C. Call Gemini AI (Stateless with Roles)
             const context = campaign.memory_base || "No specific data context.";
-
-            // Collect Chat History for Context
             const historyText = messages.map(m => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.content}`).join('\n');
             const fullPrompt = `Chat History:\n${historyText}\nUser: ${userText}`;
 
             try {
-                // Use ASSISTANT role for standard chat
                 const aiResponse = await getGeminiResponse(fullPrompt, 'ASSISTANT', context);
 
-                // D. Save AI Response to Archive
                 await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
                     role: 'assistant',
                     content: aiResponse,
                     createdAt: serverTimestamp()
                 });
 
-                // E. Update Session Metadata again
                 await setDoc(getAppDoc('sessions', campaignId), {
                     lastMessage: aiResponse,
                     updatedAt: serverTimestamp()
@@ -152,11 +173,12 @@ export default function CampaignWorkspace() {
 
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[80%] rounded-2xl p-4 text-sm font-['Barlow'] leading-relaxed shadow-sm ${msg.role === 'user'
+                            <div className={`max-w-[80%] rounded-2xl p-4 font-['Barlow'] shadow-sm ${msg.role === 'user'
                                 ? 'bg-[#101010] text-white rounded-br-none'
                                 : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none'
                                 }`}>
-                                {msg.content}
+                                {/* UPDATED: Use FormattedMessage instead of raw string */}
+                                <FormattedMessage text={msg.content} isUser={msg.role === 'user'} />
                             </div>
                         </div>
                     ))}
