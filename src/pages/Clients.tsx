@@ -1,15 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, ExternalLink, Briefcase } from 'lucide-react';
-import { onSnapshot, query, orderBy } from 'firebase/firestore';
-import { getAppCollection, Client } from '../lib/db';
+import { Plus, ExternalLink, Briefcase, Trash2 } from 'lucide-react';
+import { onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { getAppCollection, getAppDoc, type Client } from '../lib/db';
 import ClientAssistant from '../components/ClientAssistant';
+import { DeleteConfirmationModal } from '../components/ui/DeleteConfirmationModal';
 
 export default function Clients() {
     const navigate = useNavigate();
     const [clients, setClients] = useState<Client[]>([]);
     const [showAssistant, setShowAssistant] = useState(false);
     const [loading, setLoading] = useState(true);
+
+    // Delete Modal State
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDeleteClick = (e: React.MouseEvent, client: Client) => {
+        e.stopPropagation(); // Prevent navigation
+        setClientToDelete(client);
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDeleteClient = async () => {
+        if (!clientToDelete) return;
+        setIsDeleting(true);
+        try {
+            await deleteDoc(getAppDoc('clients', clientToDelete.id));
+            setDeleteModalOpen(false);
+            setClientToDelete(null);
+        } catch (error) {
+            console.error("Error deleting client:", error);
+            alert("Fehler beim Löschen des Clients.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     useEffect(() => {
         const q = query(getAppCollection('clients'), orderBy('createdAt', 'desc'));
@@ -66,15 +93,23 @@ export default function Clients() {
                                 <div className="w-12 h-12 rounded-lg bg-[#F0F0F3] flex items-center justify-center text-xl font-['Federo'] text-gray-700">
                                     {client.name.substring(0, 1)}
                                 </div>
-                                <a
-                                    href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-gray-400 hover:text-[#B7EF02] transition-colors"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <ExternalLink size={18} />
-                                </a>
+                                <div className="flex gap-2">
+                                    <a
+                                        href={client.website.startsWith('http') ? client.website : `https://${client.website}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-gray-400 hover:text-[#B7EF02] transition-colors"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <ExternalLink size={18} />
+                                    </a>
+                                    <button
+                                        onClick={(e) => handleDeleteClick(e, client)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
                             </div>
                             <h3 className="text-xl font-['Federo'] text-gray-900 mb-1">{client.name}</h3>
                             <p className="text-sm text-gray-500 font-['Barlow'] mb-4 truncate">{client.website}</p>
@@ -95,6 +130,15 @@ export default function Clients() {
                     <ClientAssistant onClose={() => setShowAssistant(false)} />
                 </>
             )}
+
+            <DeleteConfirmationModal
+                isOpen={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={confirmDeleteClient}
+                title="Client Löschen"
+                itemName={clientToDelete?.name || 'Client'}
+                isLoading={isDeleting}
+            />
         </div>
     );
 }

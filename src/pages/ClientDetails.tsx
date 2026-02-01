@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, FolderOpen, Calendar } from 'lucide-react';
-import { onSnapshot, doc, collection, query, orderBy } from 'firebase/firestore';
+import { ArrowLeft, Plus, FolderOpen, Calendar, Trash2 } from 'lucide-react';
+import { onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection } from '../lib/db';
 import CampaignAssistant from '../components/CampaignAssistant';
+import { DeleteConfirmationModal } from '../components/ui/DeleteConfirmationModal';
 
 export default function ClientDetails() {
     const { clientId } = useParams();
@@ -11,6 +12,33 @@ export default function ClientDetails() {
     const [client, setClient] = useState<any>(null);
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [showAssistant, setShowAssistant] = useState(false);
+
+    // Delete Modal State
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [campaignToDelete, setCampaignToDelete] = useState<any>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDeleteClick = (e: React.MouseEvent, campaign: any) => {
+        e.stopPropagation();
+        setCampaignToDelete(campaign);
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDeleteCampaign = async () => {
+        if (!campaignToDelete || !clientId) return;
+        setIsDeleting(true);
+        try {
+            // Path: apps/{APP_ID}/clients/{clientId}/campaigns/{campaignId}
+            await deleteDoc(getAppDoc(`clients/${clientId}/campaigns`, campaignToDelete.id));
+            setDeleteModalOpen(false);
+            setCampaignToDelete(null);
+        } catch (error) {
+            console.error("Error deleting campaign:", error);
+            alert("Fehler beim Löschen der Kampagne.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     useEffect(() => {
         if (!clientId) return;
@@ -94,6 +122,13 @@ export default function ClientDetails() {
                                         <Calendar size={12} />
                                         <span>Created {camp.createdAt?.toDate().toLocaleDateString()}</span>
                                     </div>
+                                    <button
+                                        onClick={(e) => handleDeleteClick(e, camp)}
+                                        className="mt-2 text-gray-400 hover:text-red-500 transition-colors"
+                                        title="Delete Campaign"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -108,6 +143,15 @@ export default function ClientDetails() {
                     <CampaignAssistant clientId={clientId!} onClose={() => setShowAssistant(false)} />
                 </>
             )}
+
+            <DeleteConfirmationModal
+                isOpen={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={confirmDeleteCampaign}
+                title="Kampagne Löschen"
+                itemName={campaignToDelete?.name || 'Kampagne'}
+                isLoading={isDeleting}
+            />
         </div>
     );
 }
