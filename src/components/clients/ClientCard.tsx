@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, Trash2, FolderOpen, Activity, ArrowRight, LayoutDashboard } from 'lucide-react';
-import { getCountFromServer } from 'firebase/firestore';
+import { ExternalLink, Trash2, FolderOpen, Activity, ArrowRight, LayoutDashboard, ChevronDown, ChevronUp } from 'lucide-react';
+import { getDocs } from 'firebase/firestore';
 import { getAppCollection, Client } from '../../lib/db';
 
 interface ClientCardProps {
@@ -11,25 +11,27 @@ interface ClientCardProps {
 
 export default function ClientCard({ client, onDelete }: ClientCardProps) {
     const navigate = useNavigate();
-    const [campaignCount, setCampaignCount] = useState<number | null>(null);
+    const [campaigns, setCampaigns] = useState<any[]>([]);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // Fetch Campaign Count on Mount
+    // Fetch Campaigns on Mount
     useEffect(() => {
-        const fetchCount = async () => {
+        const fetchCampaigns = async () => {
             try {
                 const coll = getAppCollection(`clients/${client.id}/campaigns`);
-                const snapshot = await getCountFromServer(coll);
-                setCampaignCount(snapshot.data().count);
+                // Use getDocs to get actual data, not just count
+                const snapshot = await getDocs(coll);
+                const campData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setCampaigns(campData);
             } catch (error) {
-                console.error("Error fetching campaign count:", error);
-                setCampaignCount(0);
+                console.error("Error fetching campaigns:", error);
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchCount();
+        fetchCampaigns();
     }, [client.id]);
 
     const handleCardClick = () => {
@@ -94,19 +96,53 @@ export default function ClientCard({ client, onDelete }: ClientCardProps) {
                 </div>
             </div>
 
-            {/* Body: Stats */}
-            <div className="py-2">
-                <div className="flex items-center gap-2 text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-100 group-hover:border-[#B7EF02]/20 group-hover:bg-[#B7EF02]/5 transition-colors">
+            {/* Body: Stats & Dropdown */}
+            <div className="py-2 space-y-2">
+                <div
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (campaigns.length > 0) setIsDropdownOpen(!isDropdownOpen);
+                    }}
+                    className={`flex items-center gap-2 text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-100 transition-colors ${campaigns.length > 0 ? 'hover:bg-[#B7EF02]/10 hover:border-[#B7EF02]/30 cursor-pointer' : 'opacity-70 cursor-default'
+                        }`}
+                >
                     <FolderOpen size={18} className="text-gray-400 group-hover:text-[#B7EF02] transition-colors" />
                     <span className="font-['Barlow'] text-sm font-medium flex-1">Campaigns</span>
-                    <span className="font-bold text-gray-900 font-['Barlow']">
-                        {loading ? (
-                            <span className="animate-pulse bg-gray-200 h-4 w-6 rounded block"></span>
-                        ) : (
-                            campaignCount
+
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-900 font-['Barlow']">
+                            {loading ? (
+                                <span className="animate-pulse bg-gray-200 h-4 w-6 rounded block"></span>
+                            ) : (
+                                campaigns.length
+                            )}
+                        </span>
+                        {campaigns.length > 0 && (
+                            <div className="text-gray-400">
+                                {isDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </div>
                         )}
-                    </span>
+                    </div>
                 </div>
+
+                {/* Campaign Dropdown List */}
+                {isDropdownOpen && (
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 divide-y divide-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                        {campaigns.map((camp: any) => (
+                            <div
+                                key={camp.id}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/client/${client.id}?campaignId=${camp.id}`); // Or direct deep link if routing supports it
+                                }}
+                                className="px-3 py-2 text-sm text-gray-600 hover:bg-white hover:text-[#B7EF02] cursor-pointer flex items-center justify-between transition-colors font-['Barlow']"
+                            >
+                                <span className="truncate">{camp.name}</span>
+                                <ExternalLink size={12} className="opacity-0 group-hover:opacity-100" />
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Footer: View Action */}
