@@ -49,10 +49,24 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                 setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
 
                 try {
-                    // A. AI Analysis
-                    const analysis = await analyzeBrand(clientName, clientUrl);
+                    // A. Scrape Website Content
+                    let scrapedContent = undefined;
+                    try {
+                        // Dynamic import to avoid top-level issues if n8n not fully configured yet
+                        const { scrapeWebsite } = await import('../lib/n8n');
+                        const scrapeResult = await scrapeWebsite(clientUrl);
+                        if (scrapeResult.content) {
+                            scrapedContent = scrapeResult.content;
+                            console.log("Scraped content length:", scrapedContent.length);
+                        }
+                    } catch (scrapeErr) {
+                        console.warn("Scraping failed, falling back to URL-only analysis:", scrapeErr);
+                    }
 
-                    // B. Save to Database
+                    // B. AI Analysis (with Scraped Data)
+                    const analysis = await analyzeBrand(clientName, clientUrl, scrapedContent);
+
+                    // C. Save to Database
                     await addDoc(getAppCollection('clients'), {
                         name: clientName,
                         website: clientUrl,
