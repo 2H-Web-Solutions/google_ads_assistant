@@ -41,9 +41,24 @@ export default function CreateCampaignModal({ clientId, onClose }: CreateCampaig
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // --- STEP 1: DATA INGESTION ---
+    const MAX_FILE_SIZE = 950000; // ~950KB for Firestore Safety
+
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+            const selectedFiles = Array.from(e.target.files!);
+            const validFiles: File[] = [];
+
+            selectedFiles.forEach(file => {
+                if (file.size > MAX_FILE_SIZE) {
+                    alert(`File "${file.name}" is too large (>${Math.round(MAX_FILE_SIZE / 1000)}KB). Please split it.`);
+                } else {
+                    validFiles.push(file);
+                }
+            });
+
+            if (validFiles.length > 0) {
+                setFiles(prev => [...prev, ...validFiles]);
+            }
         }
     };
 
@@ -113,17 +128,15 @@ export default function CreateCampaignModal({ clientId, onClose }: CreateCampaig
                 // Simple parsing to ensure valid CSV structure (optional validation could verify columns)
                 Papa.parse(text, {
                     header: true,
+                    skipEmptyLines: true, // Clean up empty rows
                     complete: async (results) => {
                         // Save as 'csv' type memory
                         await addDoc(kbCollection, {
                             type: 'csv',
                             fileName: file.name,
-                            content: JSON.stringify(results.data.slice(0, 50)), // Store first 50 rows sample or full? storing full JSON might be huge. 
-                            // Re-reading usage: The prompt said "Content: parsedString".
-                            // Let's store raw text or limited JSON. Storing full raw text is safer for 'knowledge base' retrieval.
-                            // But for Firestore limits (1MB), let's stick to text but maybe warn if huge.
-                            // For this MVP, let's store the raw text if < 800KB, else truncate.
-                            raw_content: text.length > 800000 ? text.substring(0, 800000) + "...(TRUNCATED)" : text,
+                            content: JSON.stringify(results.data), // Store FULL data now (verified by size check)
+                            raw_content: text, // Store full raw text (verified by size check)
+                            rowCount: results.data.length,
                             createdAt: serverTimestamp()
                         });
                     }

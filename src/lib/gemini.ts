@@ -85,7 +85,8 @@ export async function analyzeBrand(name: string, url: string, scrapedData?: stri
         
         CRITICAL: Do not guess. Use the following SCRAPED CONTENT from the website to extract the data:
         ---
-        ${scrapedData.substring(0, 8000)} 
+        // Gemini 3 Pro Context Window (No truncation applied)
+        ${scrapedData} 
         ---
         `;
     } else {

@@ -42,6 +42,8 @@ export default function CampaignMemory({ clientId, campaignId }: CampaignMemoryP
     }, [clientId, campaignId]);
 
     // 2. Handle File Upload (CSV)
+    const MAX_FILE_SIZE = 950000;
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -52,13 +54,19 @@ export default function CampaignMemory({ clientId, campaignId }: CampaignMemoryP
             return;
         }
 
+        if (file.size > MAX_FILE_SIZE) {
+            alert(`File is too large (>${Math.round(MAX_FILE_SIZE / 1000)}KB). Max 1MB allowed for database safety.`);
+            return;
+        }
+
         setUploading(true);
 
         Papa.parse(file, {
             complete: async (results) => {
                 try {
                     // Convert parsed data to string or JSON for storage
-                    const content = JSON.stringify(results.data.slice(0, 50)); // Limit rows for now
+                    // REMOVED LIMITS: Storing full content (size checked above)
+                    const content = JSON.stringify(results.data);
 
                     const kbPath = `clients/${clientId}/campaigns/${campaignId}/knowledge_base`;
                     await addDoc(getAppCollection(kbPath), {
