@@ -7,6 +7,7 @@ import { updateCampaignStatus, type CampaignStatus } from '../lib/firebase/campa
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal';
 import { DeleteConfirmationModal } from '../components/ui/DeleteConfirmationModal';
 import SmartBusinessCard from '../components/clients/SmartBusinessCard';
+import ClientEconomicsSimulator from '../components/clients/ClientEconomicsSimulator';
 
 // Helper for Status Colors & Icons
 const STATUS_CONFIG: Record<string, { label: string, color: string, icon: any, bg: string }> = {
@@ -143,6 +144,9 @@ export default function ClientDetails() {
 
             {/* AI Business Intelligence Card */}
             <SmartBusinessCard client={client} />
+
+            {/* Economics Simulator */}
+            <ClientEconomicsSimulator clientId={client.id} initialData={client.unitEconomics} />
 
             {/* Campaigns Grid */}
             <div className="grid grid-cols-1 gap-4">

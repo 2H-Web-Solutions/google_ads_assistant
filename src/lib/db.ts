@@ -13,12 +13,22 @@ export const getAppDoc = (subPath: string, docId: string) => {
 };
 
 // Types
+export interface UnitEconomics {
+    aov: number;          // Average Order Value
+    targetRoas: number;   // Ziel ROAS (z.B. 4.0 für 400%)
+    taxRate: number;      // Steuersatz in %
+    returnRate: number;   // Retourenquote in %
+    cogs: number;         // Cost of Goods Sold in %
+    fulfillmentCost: number; // Versand/Handling in Währung
+}
+
 export interface Client {
     id: string;
     name: string;
     website: string;
     industry?: string;
     description?: string;
+    unitEconomics?: UnitEconomics;
     createdAt: any;
 }
 
