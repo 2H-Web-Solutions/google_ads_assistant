@@ -1,0 +1,164 @@
+{
+    "name": "App: Google Ads Sync",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "google-ads-sync",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                250,
+                300
+            ],
+            "webhookId": "google-ads-sync-webhook"
+        },
+        {
+            "parameters": {
+                "authentication": "firebase",
+                "firestoreCollection": "apps/2h_web_solutions_google_ads_asssitant_v1/clients",
+                "documentId": "={{ $json.body.clientId }}",
+                "options": {}
+            },
+            "name": "Get Client ID",
+            "type": "n8n-nodes-base.googleFirebaseFirestore",
+            "typeVersion": 1,
+            "position": [
+                450,
+                300
+            ],
+            "notes": "Holt die Google Ads Customer ID aus Firestore"
+        },
+        {
+            "parameters": {
+                "operation": "get",
+                "resource": "campaign",
+                "limit": 100,
+                "returnAll": true,
+                "filters": {
+                    "status": [
+                        "ENABLED",
+                        "PAUSED"
+                    ]
+                },
+                "options": {
+                    "fields": [
+                        "id",
+                        "name",
+                        "status",
+                        "metrics.clicks",
+                        "metrics.impressions",
+                        "metrics.cost_micros",
+                        "metrics.conversions",
+                        "metrics.ctr"
+                    ]
+                }
+            },
+            "name": "Fetch Campaigns",
+            "type": "n8n-nodes-base.googleAds",
+            "typeVersion": 1,
+            "position": [
+                650,
+                300
+            ],
+            "credentials": {
+                "googleAdsOAuth2Api": {
+                    "id": "lUBJytI5rPJhIJXi",
+                    "name": "Google Ads account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "authentication": "firebase",
+                "operation": "update",
+                "firestoreCollection": "apps/2h_web_solutions_google_ads_asssitant_v1/clients/{{ $('Webhook').item.json.body.clientId }}/campaigns",
+                "documentId": "={{ $json.id }}",
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "stats": {
+                            "clicks": "={{ $json.metrics.clicks }}",
+                            "impressions": "={{ $json.metrics.impressions }}",
+                            "cost": "={{ $json.metrics.cost_micros / 1000000 }}",
+                            "conversions": "={{ $json.metrics.conversions }}",
+                            "lastUpdated": "={{ new Date().toISOString() }}"
+                        },
+                        "status": "={{ $json.status }}"
+                    }
+                }
+            },
+            "name": "Save to Firestore",
+            "type": "n8n-nodes-base.googleFirebaseFirestore",
+            "typeVersion": 1,
+            "position": [
+                850,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "{\n \"status\": \"success\",\n \"count\": {{ $items.length }}\n}",
+                "options": {}
+            },
+            "name": "Done",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                1050,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Get Client ID",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Client ID": {
+            "main": [
+                [
+                    {
+                        "node": "Fetch Campaigns",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Fetch Campaigns": {
+            "main": [
+                [
+                    {
+                        "node": "Save to Firestore",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save to Firestore": {
+            "main": [
+                [
+                    {
+                        "node": "Done",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

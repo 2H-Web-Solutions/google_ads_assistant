@@ -19,19 +19,21 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
         industry: '',
         description: '',
         products: '',
-        strategy: ''
+        strategy: '',
+        googleAdsCustomerId: ''
     });
 
     const [aiFeedback, setAiFeedback] = useState('');
 
     // Sync state with client data on load or cancel
     useEffect(() => {
-        if (client?.audit) {
+        if (client) {
             setFormData({
                 industry: client.industry || '',
                 description: client.description || '',
-                products: client.audit.products || '',
-                strategy: client.audit.strategy || ''
+                products: client.audit?.products || '',
+                strategy: client.audit?.strategy || '',
+                googleAdsCustomerId: client.googleAdsCustomerId || ''
             });
         }
     }, [client]);
@@ -43,6 +45,7 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
             await updateDoc(clientRef, {
                 industry: formData.industry,
                 description: formData.description,
+                googleAdsCustomerId: formData.googleAdsCustomerId,
                 audit: {
                     ...client.audit,
                     products: formData.products,
@@ -76,7 +79,8 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                 industry: refined.industry || formData.industry,
                 description: refined.description || formData.description,
                 products: refined.key_products || formData.products,
-                strategy: refined.suggested_strategy || formData.strategy
+                strategy: refined.suggested_strategy || formData.strategy,
+                googleAdsCustomerId: formData.googleAdsCustomerId
             });
 
             setAiFeedback('');
@@ -208,19 +212,44 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                     </div>
                 </div>
 
-                {/* Industry Field (Edit Only) */}
-                {isEditing && (
+                {/* Industry & Google Ads ID (Edit Only or View Mode) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {isEditing && (
+                        <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Industry</label>
+                            <input
+                                type="text"
+                                value={formData.industry}
+                                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#B7EF02] font-['Barlow'] text-sm"
+                                placeholder="e.g. E-commerce Fashion"
+                            />
+                        </div>
+                    )}
+
+                    {/* Google Ads Customer ID */}
                     <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Industry</label>
-                        <input
-                            type="text"
-                            value={formData.industry}
-                            onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                            className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#B7EF02] font-['Barlow'] text-sm"
-                            placeholder="e.g. E-commerce Fashion"
-                        />
+                        {isEditing ? (
+                            <>
+                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Google Ads Customer ID</label>
+                                <input
+                                    type="text"
+                                    value={formData.googleAdsCustomerId}
+                                    onChange={(e) => setFormData({ ...formData, googleAdsCustomerId: e.target.value })}
+                                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:border-[#B7EF02] font-['Barlow'] text-sm"
+                                    placeholder="e.g. 123-456-7890"
+                                />
+                            </>
+                        ) : (
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="p-1 bg-gray-100 rounded text-gray-500"><Target size={14} /></span>
+                                <span className="text-xs font-['Barlow'] text-gray-500">
+                                    {client.googleAdsCustomerId ? `G-Ads ID: ${client.googleAdsCustomerId}` : "No Google Ads ID connected"}
+                                </span>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
 
                 {/* AI Fixer Section */}
                 {isEditing && (
