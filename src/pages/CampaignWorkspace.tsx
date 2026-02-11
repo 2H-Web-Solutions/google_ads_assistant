@@ -83,10 +83,16 @@ export default function CampaignWorkspace() {
 
         // 3. Fetch Performance Report (Subcollection 'knowledge_base', Doc 'performance_report')
         const unsubReport = onSnapshot(getAppDoc(`clients/${clientId}/campaigns/${campaignId}/knowledge_base`, 'performance_report'), (doc) => {
+            console.log("🔥 FIRESTORE DEBUG - Report Path:", doc.ref.path);
+            console.log("🔥 FIRESTORE DEBUG - Exists:", doc.exists());
+
             if (doc.exists()) {
                 const data = doc.data();
+                console.log("🔥 FIRESTORE DEBUG - Content Length:", data.content?.length);
+                console.log("🔥 FIRESTORE DEBUG - Preview:", data.content?.substring(0, 100));
                 setPerformanceReport(data.content || null);
             } else {
+                console.log("❌ FIRESTORE DEBUG - Report NOT found.");
                 setPerformanceReport(null);
             }
         });
@@ -489,6 +495,19 @@ ${performanceReport}
                                     <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium" title={`Context Active: ${client.name}`}>
                                         Brain: {client.name}
                                     </span>
+                                )}
+
+                                {/* Performance Data Indicator */}
+                                {performanceReport ? (
+                                    <div className="flex items-center gap-1.5 ml-2 cursor-help" title="Data Report Loaded">
+                                        <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+                                        <span className="text-[10px] text-slate-500 uppercase tracking-wider">Data Ready</span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-1.5 ml-2 cursor-help" title="Data Report Missing">
+                                        <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                                        <span className="text-[10px] text-slate-400 uppercase tracking-wider">No Data</span>
+                                    </div>
                                 )}
                             </div>
                         </div>
