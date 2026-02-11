@@ -293,34 +293,49 @@ export default function CampaignWorkspace() {
             }
 
             // --- LIVE CAMPAIGN DATA INJECTION ---
-            let liveDataContext = "";
+            let liveContextInjection = "";
             if (campaign) {
-                const currency = campaign.stats?.currency || 'EUR';
-                const lastSyncDate = campaign.lastSyncedAt ? (campaign.lastSyncedAt.toDate ? campaign.lastSyncedAt.toDate() : new Date(campaign.lastSyncedAt)) : null;
-                const formattedDate = lastSyncDate ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(lastSyncDate) : "Nie";
+                // 1. HEUTIGES DATUM
+                const today = new Date().toLocaleDateString('de-DE', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                });
 
-                const cost = Number(campaign.stats?.cost) || 0;
-                const conversionValue = Number(campaign.stats?.conversionValue) || 0;
-                const roas = cost > 0 ? (conversionValue / cost).toFixed(2) : 'N/A';
+                // 2. LIVE STATS AUS FIREBASE (Fallback auf 0 falls leer)
+                const stats = campaign.stats || {};
+                const liveClicks = stats.clicks || 0;
+                const liveCost = stats.cost || 0;
+                const liveConversions = stats.conversions || 0;
+                const liveCPA = liveConversions > 0 ? (liveCost / liveConversions).toFixed(2) : "0.00";
 
-                liveDataContext =
-                    `\n=== LIVE PERFORMANCE DATA (LAST 30 DAYS SYNC) ===\n` +
-                    `Last Updated: ${formattedDate}\n` +
-                    `Impressions: ${campaign.stats?.impressions || 0}\n` +
-                    `Clicks: ${campaign.stats?.clicks || 0}\n` +
-                    `Cost: ${cost} ${currency}\n` +
-                    `Conversions: ${campaign.stats?.conversions || 0}\n` +
-                    `ROAS: ${roas}\n` +
-                    `-------------------------------------------------\n` +
-                    `IMPORTANT: These are the most current numbers available from the Google Ads API.\n` +
-                    `They override any older data found in CSV files for this timeframe.\n` +
-                    `Use these numbers for current performance analysis.\n` +
-                    `=================================================\n`;
+                // 3. DER OVERRIDE-TEXT
+                liveContextInjection = `
+================================================================
+*** SYSTEM-ZEIT & LIVE-DATEN OVERRIDE (PRIORITÄT: HOCH) ***
+
+HEUTIGES DATUM: ${today}
+
+ACHTUNG - KRITISCHE ANWEISUNG ZUR DATENQUELLE:
+Die angehängten CSV-Dateien (Memory) sind Historie und enden möglicherweise in der Vergangenheit (z.B. 1. Feb).
+Das ist NICHT das aktuelle Datum. Ignoriere das Enddatum der Datei für "Status Quo"-Fragen.
+
+NUTZE FÜR AKTUELLE ANALYSEN DIESE LIVE-DATEN (Letzte 30 Tage, Stand HEUTE):
+- Klicks: ${liveClicks}
+- Kosten: ${liveCost} €
+- Conversions: ${liveConversions}
+- Aktueller CPA: ${liveCPA} €
+- Kampagnen-Status: ${campaign.status || 'Aktiv'}
+
+WENN der User fragt "Wie läuft es?" oder "Was machen wir heute?", beziehe dich IMMER auf diese Live-Werte und das Datum ${today}.
+================================================================
+`;
             }
 
             // Combine: Client Context + Base Context + Knowledge Base + Cross-Campaign Selection + Live Data
             // SYSTEM: FULL CONTEXT ENFORCED - NO TRUNCATION
-            let combinedContext = `${clientContext}\n${liveDataContext}\n${baseContext}\n\n${contextString}`;
+            let combinedContext = `${clientContext}\n${liveContextInjection}\n${baseContext}\n\n${contextString}`;
 
             if (crossCampaignContext) {
                 combinedContext += `\n\n--- CROSS-CAMPAIGN KNOWLEDGE START ---\n${crossCampaignContext}\n--- CROSS-CAMPAIGN KNOWLEDGE END ---\nUse this knowledge to answer the current request if relevant.`;
