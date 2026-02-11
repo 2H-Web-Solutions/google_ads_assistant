@@ -348,18 +348,20 @@ export default function CampaignWorkspace() {
                         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                         .slice(-30); // Last 30 entries
 
-                    // Format as Markdown Table
-                    recentPerformanceString = "| Date | Clicks | Cost (Micro) | Conversions |\n|---|---|---|---|\n" +
-                        sortedStats.map(stat =>
-                            `| ${stat.date} | ${stat.clicks} | ${stat.cost_micros} | ${stat.conversions} |`
-                        ).join('\n');
+                    // Format as Markdown Table (DD.MM.YYYY, Cost in EUR)
+                    recentPerformanceString = "| Date | Clicks | Cost (€) | Conversions |\n|---|---|---|---|\n" +
+                        sortedStats.map(stat => {
+                            const date = new Date(stat.date).toLocaleDateString('de-DE'); // DD.MM.YYYY
+                            const cost = (Number(stat.cost_micros) / 1000000).toFixed(2);
+                            return `| ${date} | ${stat.clicks} | ${cost} € | ${stat.conversions} |`;
+                        }).join('\n');
                 }
 
                 // 4. SEARCH TERMS CONTEXT
                 let searchTermsContext = "";
                 if (searchTerms) {
                     searchTermsContext = `
-#### TOP SEARCH TERMS (Analyzed)
+#### Top Search Terms
 ${searchTerms}
 `;
                 }
@@ -367,7 +369,7 @@ ${searchTerms}
                 // 4. DER OVERRIDE-TEXT
                 liveContextInjection = `
 ================================================================
-*** SYSTEM-ZEIT & LIVE-DATEN OVERRIDE (PRIORITÄT: HOCH) ***
+### LIVE GOOGLE ADS DATA (Last 30 Days)
 
 HEUTIGES DATUM: ${today}
 
@@ -382,15 +384,14 @@ NUTZE FÜR AKTUELLE ANALYSEN DIESE LIVE-DATEN (Stand HEUTE):
 - Aktueller CPA: ${liveCPA} €
 - Kampagnen-Status: ${campaign.status || 'Aktiv'}
 
-=== RECENT DAILY PERFORMANCE (LAST 30 DAYS) ===
-=== RECENT DAILY PERFORMANCE (LAST 30 DAYS) ===
+#### Daily Performance Breakdown
 ${recentPerformanceString}
 
 ${searchTermsContext}
 
 (NOTE: Trust this live data over any CSV files for recent dates.)
 
-WENN der User nach einem bestimmten Datum fragt (z.B. "Wie war es gestern?" oder "Am 12.02."), NUTZE DIE DATEN AUS "RECENT DAILY PERFORMANCE".
+WENN der User nach einem bestimmten Datum fragt (z.B. "Wie war es gestern?" oder "Am 12.02."), NUTZE DIE DATEN AUS "Live Google Ads Data".
 WENN der User fragt "Wie läuft es?", beziehe dich IMMER auf diese Live-Werte und das Datum ${today}.
 ================================================================
 `;
