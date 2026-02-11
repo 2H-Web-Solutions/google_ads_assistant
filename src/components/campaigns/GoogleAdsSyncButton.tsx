@@ -2,13 +2,16 @@ import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useN8nTrigger } from '../../hooks/useN8nTrigger';
 import { toast } from 'react-hot-toast';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 
 interface GoogleAdsSyncButtonProps {
     clientId: string;
     campaignId?: string;
+    lastSyncedAt?: any;
 }
 
-export const GoogleAdsSyncButton: React.FC<GoogleAdsSyncButtonProps> = ({ clientId, campaignId }) => {
+export const GoogleAdsSyncButton: React.FC<GoogleAdsSyncButtonProps> = ({ clientId, campaignId, lastSyncedAt }) => {
     const { triggerWorkflow, isLoading } = useN8nTrigger();
     const [lastSync, setLastSync] = useState<string | null>(null);
 
@@ -41,6 +44,9 @@ export const GoogleAdsSyncButton: React.FC<GoogleAdsSyncButtonProps> = ({ client
             });
 
             if (result) {
+                const clientRef = doc(db, 'apps', '2h_web_solutions_google_ads_asssitant_v1', 'clients', clientId);
+                await updateDoc(clientRef, { lastSyncedAt: serverTimestamp() });
+
                 setLastSync(new Date().toLocaleTimeString());
                 toast.success("Google Ads Sync Complete", { id: toastId });
             } else {
@@ -55,20 +61,29 @@ export const GoogleAdsSyncButton: React.FC<GoogleAdsSyncButtonProps> = ({ client
     };
 
     return (
-        <button
-            onClick={handleSync}
-            disabled={isLoading}
-            className={`
+        <div className="flex flex-col items-center">
+            <button
+                onClick={handleSync}
+                disabled={isLoading}
+                className={`
         flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all
         ${isLoading
-                    ? 'bg-gray-100 text-gray-400 cursor-wait'
-                    : 'bg-[#B7EF02] hover:bg-[#a6d902] text-black shadow-sm hover:shadow-md'
-                }
+                        ? 'bg-gray-100 text-gray-400 cursor-wait'
+                        : 'bg-[#B7EF02] hover:bg-[#a6d902] text-black shadow-sm hover:shadow-md'
+                    }
       `}
-            title={lastSync ? `Last sync: ${lastSync}` : 'Sync with Google Ads'}
-        >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? 'Syncing...' : 'Sync Ads'}</span>
-        </button>
+                title={lastSync ? `Last sync: ${lastSync}` : 'Sync with Google Ads'}
+            >
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>{isLoading ? 'Syncing...' : 'Sync Ads'}</span>
+            </button>
+            <div className="text-center mt-2">
+                <p className="text-[10px] text-gray-400 font-['Barlow']">
+                    {lastSyncedAt ?
+                        `Letzter Sync: ${new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(lastSyncedAt.toDate ? lastSyncedAt.toDate() : new Date(lastSyncedAt))}`
+                        : "Noch nie synchronisiert"}
+                </p>
+            </div>
+        </div>
     );
 };

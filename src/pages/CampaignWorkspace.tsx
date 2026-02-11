@@ -292,9 +292,28 @@ export default function CampaignWorkspace() {
                     `Website: ${client.website || 'N/A'}\n`;
             }
 
-            // Combine: Client Context + Base Context + Knowledge Base + Cross-Campaign Selection
+            // --- LIVE CAMPAIGN DATA INJECTION ---
+            let liveDataContext = "";
+            if (campaign) {
+                const currency = campaign.stats?.currency || 'EUR';
+                const lastSyncDate = campaign.lastSyncedAt ? (campaign.lastSyncedAt.toDate ? campaign.lastSyncedAt.toDate() : new Date(campaign.lastSyncedAt)) : null;
+                const formattedDate = lastSyncDate ? new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(lastSyncDate) : "Nie";
+
+                liveDataContext =
+                    `\n--- CURRENT LIVE DATA (GOOGLE ADS SYNC) ---\n` +
+                    `Last Sync: ${formattedDate}\n` +
+                    `Impressions: ${campaign.stats?.impressions || 0}\n` +
+                    `Clicks: ${campaign.stats?.clicks || 0}\n` +
+                    `Cost: ${campaign.stats?.cost || 0} ${currency}\n` +
+                    `Conversions: ${campaign.stats?.conversions || 0}\n` +
+                    `Status: ${campaign.status}\n` +
+                    `-------------------------------------------\n` +
+                    `WARNUNG: Diese Live-Daten sind aktueller als jede hochgeladene CSV-Datei. Nutze IMMER diese Werte für die Analyse der aktuellen Performance.\n`;
+            }
+
+            // Combine: Client Context + Base Context + Knowledge Base + Cross-Campaign Selection + Live Data
             // SYSTEM: FULL CONTEXT ENFORCED - NO TRUNCATION
-            let combinedContext = `${clientContext}\n${baseContext}\n\n${contextString}`;
+            let combinedContext = `${clientContext}\n${liveDataContext}\n${baseContext}\n\n${contextString}`;
 
             if (crossCampaignContext) {
                 combinedContext += `\n\n--- CROSS-CAMPAIGN KNOWLEDGE START ---\n${crossCampaignContext}\n--- CROSS-CAMPAIGN KNOWLEDGE END ---\nUse this knowledge to answer the current request if relevant.`;

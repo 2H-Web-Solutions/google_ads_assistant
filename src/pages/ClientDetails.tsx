@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, FolderOpen, Calendar, Trash2, PlayCircle, PauseCircle, Archive as ArchiveIcon, Filter, Check } from 'lucide-react';
+import { ArrowLeft, Plus, PlayCircle, PauseCircle, Archive as ArchiveIcon, Filter } from 'lucide-react';
 import { onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection } from '../lib/db';
 import { updateCampaignStatus, type CampaignStatus } from '../lib/firebase/campaigns';
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal';
 import { DeleteConfirmationModal } from '../components/ui/DeleteConfirmationModal';
 import SmartBusinessCard from '../components/clients/SmartBusinessCard';
+
 import ClientEconomicsSimulator from '../components/clients/ClientEconomicsSimulator';
+import { CampaignCard } from '../components/campaigns/CampaignCard';
+import { GoogleAdsSyncButton } from '../components/campaigns/GoogleAdsSyncButton';
 
 // Helper for Status Colors & Icons
 const STATUS_CONFIG: Record<string, { label: string, color: string, icon: any, bg: string }> = {
@@ -25,7 +28,7 @@ export default function ClientDetails() {
 
     // UI State
     const [showArchived, setShowArchived] = useState(false);
-    const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
+
 
     // Delete Modal State
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -38,15 +41,12 @@ export default function ClientDetails() {
         setDeleteModalOpen(true);
     };
 
-    const handleStatusClick = (e: React.MouseEvent, campaignId: string) => {
-        e.stopPropagation();
-        setOpenStatusMenuId(openStatusMenuId === campaignId ? null : campaignId);
-    };
+
 
     const changeStatus = async (e: React.MouseEvent, campaignId: string, newStatus: CampaignStatus) => {
         e.stopPropagation();
         if (!clientId) return;
-        setOpenStatusMenuId(null); // Close menu
+
         try {
             await updateCampaignStatus(clientId, campaignId, newStatus);
         } catch (error) {
@@ -86,13 +86,12 @@ export default function ClientDetails() {
         });
 
         // Close menu on click outside
-        const closeMenu = () => setOpenStatusMenuId(null);
-        window.addEventListener('click', closeMenu);
+
 
         return () => {
             unsubClient();
             unsubCampaigns();
-            window.removeEventListener('click', closeMenu);
+
         };
     }, [clientId]);
 
@@ -131,6 +130,7 @@ export default function ClientDetails() {
                                 {showArchived ? 'Hide Archived' : `Show Archived (${archivedCount})`}
                             </button>
                         )}
+                        <GoogleAdsSyncButton clientId={clientId!} lastSyncedAt={client.lastSyncedAt} />
                         <button
                             onClick={() => setShowCreateModal(true)}
                             className="flex items-center gap-2 bg-[#101010] text-[#B7EF02] px-5 py-2.5 rounded-lg hover:bg-gray-900 transition-colors font-['Barlow'] font-medium"
@@ -164,71 +164,16 @@ export default function ClientDetails() {
                         <p className="text-gray-500 font-['Barlow']">{campaigns.length > 0 ? "No active campaigns. Check archived." : "No campaigns found. Launch the Assistant to import or create one."}</p>
                     </div>
                 ) : (
-                    visibleCampaigns.map((camp) => {
-                        const status = camp.status || 'active';
-                        const config = STATUS_CONFIG[status] || STATUS_CONFIG['active'];
-                        const isArchived = status === 'archived';
-
-                        return (
-                            <div
-                                key={camp.id}
-                                onClick={() => navigate(`/clients/${clientId}/campaigns/${camp.id}`)}
-                                className={`bg-white p-6 rounded-xl border border-gray-200 transition-all cursor-pointer group relative ${isArchived ? 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0' : 'hover:border-[#B7EF02]'}`}
-                            >
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-4">
-                                        <div className={`p-3 rounded-lg transition-colors ${isArchived ? 'bg-gray-100 text-gray-400' : 'bg-[#F0F0F3] text-gray-600 group-hover:bg-[#f9fceb] group-hover:text-[#8cb800]'}`}>
-                                            <FolderOpen size={24} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-['Federo'] text-gray-900">{camp.name}</h3>
-
-                                            {/* Status Dropdown */}
-                                            <div className="flex items-center gap-3 mt-1 relative">
-                                                <div
-                                                    onClick={(e) => handleStatusClick(e, camp.id)}
-                                                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded cursor-pointer hover:ring-1 hover:ring-opacity-20 hover:ring-current ${config.bg} ${config.color}`}
-                                                >
-                                                    <config.icon size={12} />
-                                                    <span className="text-xs font-bold uppercase">{config.label}</span>
-                                                </div>
-
-                                                {openStatusMenuId === camp.id && (
-                                                    <div className="absolute top-full left-0 mt-1 w-32 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-                                                        {(['active', 'paused', 'archived'] as CampaignStatus[]).map((s) => (
-                                                            <button
-                                                                key={s}
-                                                                onClick={(e) => changeStatus(e, camp.id, s)}
-                                                                className={`flex items-center gap-2 w-full px-3 py-2 text-xs font-medium hover:bg-gray-50 text-left ${s === status ? 'text-[#B7EF02]' : 'text-gray-700'}`}
-                                                            >
-                                                                {s === status && <Check size={12} />}
-                                                                <span className={s !== status ? 'ml-5' : ''}>{s.charAt(0).toUpperCase() + s.slice(1)}</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                <span className="text-xs text-gray-400 font-['Barlow'] border-l border-gray-200 pl-3">{camp.type || 'Search'}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="flex items-center gap-1 text-xs text-gray-400 mb-1">
-                                            <Calendar size={12} />
-                                            <span>Created {camp.createdAt?.toDate().toLocaleDateString()}</span>
-                                        </div>
-                                        <button
-                                            onClick={(e) => handleDeleteClick(e, camp)}
-                                            className="mt-2 text-gray-400 hover:text-red-500 transition-colors"
-                                            title="Delete Campaign"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )
-                    })
+                    visibleCampaigns.map((camp) => (
+                        <CampaignCard
+                            key={camp.id}
+                            campaign={camp}
+                            onNavigate={(id) => navigate(`/clients/${clientId}/campaigns/${id}`)}
+                            onDelete={handleDeleteClick}
+                            onChangeStatus={changeStatus}
+                            statusConfig={STATUS_CONFIG}
+                        />
+                    ))
                 )}
             </div>
 
