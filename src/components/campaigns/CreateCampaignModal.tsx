@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, FileText, Brain, Check, MessageSquare, ArrowRight, Loader } from 'lucide-react';
 import Papa from 'papaparse';
-import { addDoc, serverTimestamp, collection, onSnapshot } from 'firebase/firestore';
-import { getAppCollection, getAppDoc } from '../../lib/db';
+import { addDoc, serverTimestamp, collection, onSnapshot, setDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { getAppDoc } from '../../lib/db';
 import { getGeminiResponse } from '../../lib/gemini';
 
 interface CreateCampaignModalProps {
@@ -13,6 +14,7 @@ interface CreateCampaignModalProps {
 type WizardStep = 'data' | 'strategy' | 'review';
 
 export default function CreateCampaignModal({ clientId, onClose }: CreateCampaignModalProps) {
+    const navigate = useNavigate();
     const [step, setStep] = useState<WizardStep>('data');
     const [loading, setLoading] = useState(false);
     const [client, setClient] = useState<any>(null);
@@ -110,8 +112,21 @@ export default function CreateCampaignModal({ clientId, onClose }: CreateCampaig
         setLoading(true);
 
         try {
-            // 1. Create Campaign Document
-            const campRef = await addDoc(getAppCollection(`clients/${clientId}/campaigns`), {
+            // 1. Create Campaign Document (Custom ID)
+            const generateCampaignId = (name: string) => {
+                return name.toLowerCase()
+                    .replace(/ä/g, 'ae')
+                    .replace(/ö/g, 'oe')
+                    .replace(/ü/g, 'ue')
+                    .replace(/ß/g, 'ss')
+                    .replace(/\s+/g, '-')     // Space -> Hyphen
+                    .replace(/[^a-z0-9-]/g, ''); // Keep only alphanumeric and hyphen
+            };
+
+            const campaignId = generateCampaignId(basicInfo.name);
+            const campRef = getAppDoc(`clients/${clientId}/campaigns`, campaignId);
+
+            await setDoc(campRef, {
                 name: basicInfo.name,
                 budget: basicInfo.budget,
                 status: 'Draft',
@@ -152,6 +167,8 @@ export default function CreateCampaignModal({ clientId, onClose }: CreateCampaig
             });
 
             onClose();
+            // Navigate to new Campaign Workspace
+            navigate(`/clients/${clientId}/campaigns/${campaignId}`);
 
         } catch (error) {
             console.error("Creation Error:", error);
