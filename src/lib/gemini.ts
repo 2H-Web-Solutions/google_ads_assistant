@@ -78,8 +78,28 @@ ${prompt}
  * Analyzes a brand based on Name and URL to generate a business profile.
  * usage: const profile = await analyzeBrand("Nike", "nike.com", scrapedMarkdown);
  */
-export async function analyzeBrand(name: string, url: string, scrapedData?: string) {
+export async function analyzeBrand(name: string, url: string, scrapedData?: string, userHint?: string) {
     let contextInstruction = `Analyze the brand "${name}" with website "${url}".`;
+
+    // STRICT REALITY CHECK
+    contextInstruction += `
+    
+    CRITICAL RULE: Do NOT rely on your internal training data for addresses, physical locations, or contact details if they conflict with the provided URL or Content. 
+    Famous landmarks (e.g., 'Mozarthaus') often have multiple locations. 
+    YOU MUST extract the address specifically from the context provided (Website URL or Scraped Text). 
+    
+    If Scraped Data is available, look specifically for patterns like 'Impressum', 'Contact', 'Anschrift', or footer addresses.
+    `;
+
+    if (userHint) {
+        contextInstruction += `
+        
+        USER OVERRIDE INSTRUCTION (HIGHEST PRIORITY):
+        "${userHint}"
+        
+        This instruction overrides ALL other data sources (scraped data or internal knowledge).
+        `;
+    }
 
     if (scrapedData) {
         contextInstruction += `
@@ -92,7 +112,7 @@ export async function analyzeBrand(name: string, url: string, scrapedData?: stri
         `;
     } else {
         contextInstruction += `
-        Analyze based on the URL context and your knowledge base.
+        Analyze based on the URL context and your knowledge base, BUT prioritize the URL's actual content if known.
         `;
     }
 
