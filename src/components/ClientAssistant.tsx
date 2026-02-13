@@ -1,7 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, X } from 'lucide-react';
-import { getAppCollection } from '../lib/db';
-import { addDoc, serverTimestamp } from 'firebase/firestore';
+import { serverTimestamp, setDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { getAppDoc } from '../lib/db';
 import { analyzeBrand } from '../lib/gemini';
 
 interface ClientAssistantProps {
@@ -9,6 +11,7 @@ interface ClientAssistantProps {
 }
 
 export default function ClientAssistant({ onClose }: ClientAssistantProps) {
+    const navigate = useNavigate();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([
         { role: 'assistant', content: "Hello! I'm your Client Onboarding Assistant. What is the name of the new client you'd like to add?" }
@@ -38,12 +41,21 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
 
             // 1. User provided Name
             if (messages.length === 1) {
-                aiResponse = `Great. I'll set up ${userMsg}. What is their website URL? I'll scan it for context.`;
+                aiResponse = `Great.I'll set up ${userMsg}. What is their website URL? I'll scan it for context.`;
             }
             // 2. User provided Website -> TRIGGER ANALYSIS
             else if (messages.length === 3) {
                 const clientName = messages[1].content;
                 const clientUrl = userMsg;
+
+                // Helper to generate ID
+                const generateClientId = (name: string) => {
+                    return name.toLowerCase()
+                        .replace(/\s+/g, '_')     // Replace spaces with underscores
+                        .replace(/[^a-z0-9_]/g, ''); // Remove non-alphanumeric chars
+                };
+
+                const newClientId = generateClientId(clientName);
 
                 aiResponse = `Scanning ${clientUrl} for ${clientName}... This might take a few seconds...`;
                 setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
@@ -66,8 +78,8 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                     // B. AI Analysis (with Scraped Data)
                     const analysis = await analyzeBrand(clientName, clientUrl, scrapedContent);
 
-                    // C. Save to Database
-                    await addDoc(getAppCollection('clients'), {
+                    // C. Save to Database (using setDoc with custom ID)
+                    await setDoc(getAppDoc('clients', newClientId), {
                         name: clientName,
                         website: clientUrl,
                         industry: analysis.industry,
@@ -81,18 +93,30 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                         status: 'active'
                     });
 
-                    aiResponse = `Done! I've created the profile for **${clientName}**.\n\n**Industry:** ${analysis.industry}\n**Strategy:** ${analysis.suggested_strategy}\n\nYou can now close this chat.`;
+                    aiResponse = `Done! I've created the profile for **${clientName}** (ID: ${newClientId}).\n\n**Industry:** ${analysis.industry}\n**Strategy:** ${analysis.suggested_strategy}\n\nRedirecting you to the client dashboard...`;
+
+                    // Navigate after a short delay
+                    setTimeout(() => {
+                        navigate(`/clients/${newClientId}`);
+                        onClose();
+                    }, 3000);
+
                 } catch (e) {
                     console.error(e);
-                    aiResponse = "I created the client, but the AI analysis failed. Please check the details manually.";
+                    aiResponse = "I created the client (fallback mode), but the AI analysis failed. Please check the details manually.";
                     // Fallback creation if AI fails totally
-                    await addDoc(getAppCollection('clients'), {
+                    await setDoc(getAppDoc('clients', newClientId), {
                         name: clientName,
                         website: clientUrl,
                         createdAt: serverTimestamp(),
                         status: 'active',
                         description: "Manual creation (AI failed)"
                     });
+                    // Navigate after a delay even on fallback
+                    setTimeout(() => {
+                        navigate(`/clients/${newClientId}`);
+                        onClose();
+                    }, 3000);
                 }
             }
 
