@@ -71,14 +71,16 @@ export default function SmartBusinessCard({ clientData, onUpdate }: SmartBusines
         try {
             let scrapedContent: string | null = null;
             if (clientData.website) {
-                toast("Analysing website...", { icon: "🌐" });
+                toast("Analysing website (via n8n)...", { icon: "🌐" });
                 scrapedContent = await scrapeWebsite(clientData.website);
+
                 if (!scrapedContent) {
-                    const proceed = window.confirm("Website scraping failed or was blocked. Continue with only AI internal knowledge?");
-                    if (!proceed) {
-                        setIsGenerating(false);
-                        return;
-                    }
+                    toast.error("Website konnte nicht gelesen werden. Bitte Daten manuell prüfen.", { duration: 5000 });
+                    // We still allow proceeding, but the AI will know it failed via the "null" scrapedContent
+                    // However, the user request says: "If scrapedContent is null... show a toast". 
+                    // It implies we might stop or proceed. 
+                    // The prompt "analyzeBrand" handles missing scraped data by returning "Scraping Failed" object if no user hint.
+                    // So we can proceed, and the AI will return the "Scraping Failed" JSON.
                 }
             }
 

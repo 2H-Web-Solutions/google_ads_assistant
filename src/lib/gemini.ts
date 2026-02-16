@@ -78,20 +78,48 @@ ${prompt}
  * Attempts to scrape the website content.
  * Note: Client-side scraping is limited by CORS. In a production app, this should call a backend proxy or n8n webhook.
  */
+/**
+ * Attempts to scrape the website content via n8n Webhook.
+ * This avoids CORS issues and ensures reliable extraction.
+ */
 export async function scrapeWebsite(url: string): Promise<string | null> {
-    try {
-        // Simple fetch - often blocked by CORS, but we try specific endpoints or proxies if configured.
-        // For now, we attempt a direct fetch.
-        const response = await fetch(url, { method: 'GET', mode: 'cors' });
-        if (!response.ok) throw new Error("Network response was not ok");
-        const text = await response.text();
+    const webhookUrl = import.meta.env.VITE_N8N_SCRAPER_URL;
 
-        // Basic HTML cleanup to get text content
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, 'text/html');
-        return doc.body.innerText.slice(0, 5000); // Limit context
+    if (!webhookUrl) {
+        console.error("⚠️ System Configuration Error: VITE_N8N_SCRAPER_URL is missing in .env");
+        return null;
+    }
+
+    try {
+        console.log(`📡 Sending scraping request to n8n for: ${url}`);
+
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ url })
+        });
+
+        if (!response.ok) {
+            throw new Error(`n8n Webhook Error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Expecting n8n to return { "content": "markdown text..." } or similar
+        // Adjust based on your actual n8n output structure. 
+        // Assuming n8n returns a JSON with a 'text' or 'content' field.
+        const scrapedText = data.text || data.content || data.output || "";
+
+        if (!scrapedText || scrapedText.length < 50) {
+            console.warn("⚠️ n8n returned empty or too short content.");
+            return null;
+        }
+
+        return scrapedText.slice(0, 8000); // Increased context limit for better AI analysis
     } catch (error) {
-        console.warn("Client-side scraping failed (CORS or Network):", error);
+        console.error("❌ Scraping Service Failed:", error);
         return null;
     }
 }
@@ -109,11 +137,19 @@ export async function analyzeBrand(name: string, url: string, scrapedData?: stri
     STRICT REALITY HIERARCHY:
     1. Scraped Content (Highest Priority) - IF AVAILABLE, YOU MUST USE THIS. IGNORE INTERNAL KNOWLEDGE.
     2. User Hints (Overrides everything if provided)
-    3. Internal AI Knowledge (last resort)
+    3. Internal AI Knowledge (last resort - ONLY allowed if no URL was provided at all)
 
-    CRITICAL RULE: If Scraped Content is provided, YOU MUST IGNORE all prior knowledge about the domain.
-    If the content says 'Service', do not assume 'E-Commerce'.
-    DO NOT HALLUCINATE.
+    CRITICAL RULE: If a URL was provided ("${url}") but 'Scraped Content' is missing or empty, YOU MUST NOT HALLUCINATE.
+    Do not guess based on the domain name. Do not use training data.
+    
+    IF SCRAPING FAILED AND NO USER HINT:
+    Return exactly:
+    {
+      "industry": "Scraping Failed",
+      "description": "Could not read website. Please provide manual details or check the URL.",
+      "key_products": "",
+      "suggested_strategy": "Manual input required."
+    }
     `;
 
     if (userHint) {
@@ -135,7 +171,8 @@ export async function analyzeBrand(name: string, url: string, scrapedData?: stri
         `;
     } else {
         contextInstruction += `
-        No scraped data available. Analyze based on URL context and internal knowledge.
+        ⚠️ SCRAPING FAILED. NO SOURCE MATERIAL.
+        Do not invent data. Follow the CRITICAL RULE above.
         `;
     }
 
@@ -159,10 +196,10 @@ export async function analyzeBrand(name: string, url: string, scrapedData?: stri
     } catch (error) {
         console.error("AI Analysis Failed:", error);
         return {
-            industry: "Unknown",
-            description: `New client: ${name}. Website: ${url}`,
+            industry: "Analysis Error",
+            description: `System fail: ${error.message}`,
             key_products: "",
-            suggested_strategy: "Manual review required."
+            suggested_strategy: "Try again later."
         };
     }
 }
@@ -194,7 +231,7 @@ export async function refineClientData(currentAnalysis: any, userFeedback: strin
         const responseText = await getGeminiResponse(prompt, 'ASSISTANT', 'Data refinement task.');
         const cleanJson = responseText.replace(/```json|```/g, '').trim();
         return JSON.parse(cleanJson);
-    } catch (error) {
+    } catch (error: any) {
         console.error("AI Refinement Failed:", error);
         throw new Error("Could not refine data.");
     }
