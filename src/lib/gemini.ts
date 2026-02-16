@@ -75,44 +75,67 @@ ${prompt}
 }
 
 /**
+ * Attempts to scrape the website content.
+ * Note: Client-side scraping is limited by CORS. In a production app, this should call a backend proxy or n8n webhook.
+ */
+export async function scrapeWebsite(url: string): Promise<string | null> {
+    try {
+        // Simple fetch - often blocked by CORS, but we try specific endpoints or proxies if configured.
+        // For now, we attempt a direct fetch.
+        const response = await fetch(url, { method: 'GET', mode: 'cors' });
+        if (!response.ok) throw new Error("Network response was not ok");
+        const text = await response.text();
+
+        // Basic HTML cleanup to get text content
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        return doc.body.innerText.slice(0, 5000); // Limit context
+    } catch (error) {
+        console.warn("Client-side scraping failed (CORS or Network):", error);
+        return null;
+    }
+}
+
+/**
  * Analyzes a brand based on Name and URL to generate a business profile.
  * usage: const profile = await analyzeBrand("Nike", "nike.com", scrapedMarkdown);
  */
 export async function analyzeBrand(name: string, url: string, scrapedData?: string, userHint?: string) {
     let contextInstruction = `Analyze the brand "${name}" with website "${url}".`;
 
-    // STRICT REALITY CHECK
+    // STRICT REALITY HIERARCHY
     contextInstruction += `
     
-    CRITICAL RULE: Do NOT rely on your internal training data for addresses, physical locations, or contact details if they conflict with the provided URL or Content. 
-    Famous landmarks (e.g., 'Mozarthaus') often have multiple locations. 
-    YOU MUST extract the address specifically from the context provided (Website URL or Scraped Text). 
-    
-    If Scraped Data is available, look specifically for patterns like 'Impressum', 'Contact', 'Anschrift', or footer addresses.
+    STRICT REALITY HIERARCHY:
+    1. Scraped Content (Highest Priority) - IF AVAILABLE, YOU MUST USE THIS. IGNORE INTERNAL KNOWLEDGE.
+    2. User Hints (Overrides everything if provided)
+    3. Internal Knowledge (ONLY if 1 and 2 are empty/missing)
+
+    CRITICAL RULE: If scrapedContent is provided, you MUST ignore any previous training data about this domain.
+    If the content says 'Service', do not assume 'E-Commerce'.
+    DO NOT HALLUCINATE.
     `;
 
     if (userHint) {
         contextInstruction += `
-        
-        USER OVERRIDE INSTRUCTION (HIGHEST PRIORITY):
+        USER HINT (PRIORITY 2 - Contextual Override):
         "${userHint}"
-        
-        This instruction overrides ALL other data sources (scraped data or internal knowledge).
         `;
     }
 
     if (scrapedData) {
         contextInstruction += `
         
-        CRITICAL: Do not guess. Use the following SCRAPED CONTENT from the website to extract the data:
+        SOURCE MATERIAL (PRIORITY 1 - TRUTH):
         ---
-        // Gemini 3 Pro Context Window (No truncation applied)
-        ${scrapedData} 
+        ${scrapedData}
         ---
+        
+        Instruction: Extract facts ONLY from the Source Material above.
         `;
     } else {
         contextInstruction += `
-        Analyze based on the URL context and your knowledge base, BUT prioritize the URL's actual content if known.
+        No scraped data available. Analyze based on URL context and internal knowledge.
         `;
     }
 
@@ -130,16 +153,11 @@ export async function analyzeBrand(name: string, url: string, scrapedData?: stri
   `;
 
     try {
-        // Re-using your existing generic getGeminiResponse, or calling model directly if needed.
-        // Assuming getGeminiResponse returns a string, we parse it.
-        const responseText = await getGeminiResponse(prompt, 'ASSISTANT', 'Focus on factual business analysis.');
-
-        // Clean up potential Markdown formatting from AI (e.g. ```json ... ```)
+        const responseText = await getGeminiResponse(prompt, 'ASSISTANT', 'Focus on strict factual analysis from provided context.');
         const cleanJson = responseText.replace(/```json|```/g, '').trim();
         return JSON.parse(cleanJson);
     } catch (error) {
         console.error("AI Analysis Failed:", error);
-        // Fallback data if AI fails
         return {
             industry: "Unknown",
             description: `New client: ${name}. Website: ${url}`,

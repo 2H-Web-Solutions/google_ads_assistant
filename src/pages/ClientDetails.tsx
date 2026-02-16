@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, PlayCircle, PauseCircle, Archive as ArchiveIcon, Filter } from 'lucide-react';
-import { onSnapshot, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { onSnapshot, query, orderBy, deleteDoc, updateDoc } from 'firebase/firestore';
 import { getAppDoc, getAppCollection } from '../lib/db';
 import { updateCampaignStatus, type CampaignStatus } from '../lib/firebase/campaigns';
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal';
@@ -142,7 +142,14 @@ export default function ClientDetails() {
 
 
             {/* AI Business Intelligence Context */}
-            <SmartBusinessCard client={client} />
+            <SmartBusinessCard
+                clientData={client}
+                onUpdate={async (data) => {
+                    if (!clientId) return;
+                    await updateDoc(getAppDoc('clients', clientId), data);
+                    // Optimistic update or wait for snapshot
+                }}
+            />
 
 
             {/* Economics Simulator */}

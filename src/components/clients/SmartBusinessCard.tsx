@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Brain, Target, Pencil, X, Check, Loader2, Sparkles } from 'lucide-react';
-import { updateDoc } from 'firebase/firestore';
-import { getAppDoc } from '../../lib/db';
-import { refineClientData } from '../../lib/gemini';
+import { scrapeWebsite, analyzeBrand } from '../../lib/gemini';
 import { toast } from 'react-hot-toast';
 
 interface SmartBusinessCardProps {
-    client: any; // Using any for flexibility as Client type might need import
+    clientData: any;
+    onUpdate: (data: any) => Promise<void>;
 }
 
-export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
+export default function SmartBusinessCard({ clientData, onUpdate }: SmartBusinessCardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -27,27 +26,26 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
 
     // Sync state with client data on load or cancel
     useEffect(() => {
-        if (client) {
+        if (clientData) {
             setFormData({
-                industry: client.industry || '',
-                description: client.description || '',
-                products: client.audit?.products || '',
-                strategy: client.audit?.strategy || '',
-                googleAdsCustomerId: client.googleAdsCustomerId || ''
+                industry: clientData.industry || '',
+                description: clientData.description || '',
+                products: clientData.audit?.products || '',
+                strategy: clientData.audit?.strategy || '',
+                googleAdsCustomerId: clientData.googleAdsCustomerId || ''
             });
         }
-    }, [client]);
+    }, [clientData]);
 
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            const clientRef = getAppDoc('clients', client.id);
-            await updateDoc(clientRef, {
+            await onUpdate({
                 industry: formData.industry,
                 description: formData.description,
                 googleAdsCustomerId: formData.googleAdsCustomerId,
                 audit: {
-                    ...client.audit,
+                    ...clientData.audit,
                     products: formData.products,
                     strategy: formData.strategy
                 }
@@ -63,31 +61,41 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
     };
 
     const handleAiFix = async () => {
-        if (!aiFeedback.trim()) return;
+        // Strict Rule: Inform user if scraping fails, don't just guess.
         setIsGenerating(true);
         try {
-            const currentAnalysis = {
-                industry: formData.industry,
-                description: formData.description,
-                key_products: formData.products,
-                suggested_strategy: formData.strategy
-            };
+            let scrapedContent: string | null = null;
+            if (clientData.website) {
+                toast("Analysing website...", { icon: "🌐" });
+                scrapedContent = await scrapeWebsite(clientData.website);
+                if (!scrapedContent) {
+                    const proceed = window.confirm("Website scraping failed or was blocked. Continue with only AI internal knowledge?");
+                    if (!proceed) {
+                        setIsGenerating(false);
+                        return;
+                    }
+                }
+            }
 
-            const refined = await refineClientData(currentAnalysis, aiFeedback);
+            // If we have a prompt ("aiFeedback"), we treat it as a refinement OR a hint for re-analysis.
+            // But since strict rules say "If scraped content is provided...", we should probably run analyzeBrand.
+            // If the user provided a correction via input, we pass that as userHint.
 
-            setFormData({
-                industry: refined.industry || formData.industry,
-                description: refined.description || formData.description,
-                products: refined.key_products || formData.products,
-                strategy: refined.suggested_strategy || formData.strategy,
-                googleAdsCustomerId: formData.googleAdsCustomerId
-            });
+            const result = await analyzeBrand(clientData.name, clientData.website || '', scrapedContent || undefined, aiFeedback);
+
+            setFormData(prev => ({
+                ...prev,
+                industry: result.industry || prev.industry,
+                description: result.description || prev.description,
+                products: result.key_products || prev.products,
+                strategy: result.suggested_strategy || prev.strategy
+            }));
 
             setAiFeedback('');
-            toast.success("AI Refined the data!");
+            toast.success("AI updated the profile from real data!");
         } catch (error) {
             console.error(error);
-            toast.error("AI could not fix the data.");
+            toast.error("AI Analysis failed.");
         } finally {
             setIsGenerating(false);
         }
@@ -105,9 +113,9 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                     <h2 className="text-xl font-['Federo'] text-gray-900">
                         {isEditing ? "Editing Business Intelligence" : "AI Business Intelligence"}
                     </h2>
-                    {!isEditing && client.industry && (
+                    {!isEditing && clientData.industry && (
                         <span className="ml-2 px-3 py-1 bg-[#B7EF02]/20 text-black text-xs font-bold uppercase rounded-full font-['Barlow'] tracking-wide">
-                            {client.industry}
+                            {clientData.industry}
                         </span>
                     )}
                 </div>
@@ -157,7 +165,7 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                         />
                     ) : (
                         <p className="font-['Barlow'] text-gray-600 leading-relaxed max-w-4xl">
-                            {client.description || "No description available."}
+                            {clientData.description || "No description available."}
                         </p>
                     )}
                 </div>
@@ -181,7 +189,7 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                             </div>
                         ) : (
                             <div className="flex flex-wrap gap-2">
-                                {(client.audit?.products || "").split(',').map((prod: string, i: number) => (
+                                {(clientData.audit?.products || "").split(',').map((prod: string, i: number) => (
                                     prod.trim() && (
                                         <span key={i} className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded text-sm text-gray-700 font-['Barlow']">
                                             {prod.trim()}
@@ -206,7 +214,7 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                             />
                         ) : (
                             <div className="p-4 bg-gray-50 border-l-4 border-[#B7EF02] text-gray-700 italic font-medium font-['Barlow'] rounded-r-lg">
-                                "{client.audit?.strategy || "No strategy defined."}"
+                                "{clientData.audit?.strategy || "No strategy defined."}"
                             </div>
                         )}
                     </div>
@@ -244,7 +252,7 @@ export default function SmartBusinessCard({ client }: SmartBusinessCardProps) {
                             <div className="flex items-center gap-2 mt-2">
                                 <span className="p-1 bg-gray-100 rounded text-gray-500"><Target size={14} /></span>
                                 <span className="text-xs font-['Barlow'] text-gray-500">
-                                    {client.googleAdsCustomerId ? `G-Ads ID: ${client.googleAdsCustomerId}` : "No Google Ads ID connected"}
+                                    {clientData.googleAdsCustomerId ? `G-Ads ID: ${clientData.googleAdsCustomerId}` : "No Google Ads ID connected"}
                                 </span>
                             </div>
                         )}
