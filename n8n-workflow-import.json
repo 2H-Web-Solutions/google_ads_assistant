@@ -6,7 +6,8 @@
                 "authentication": "none",
                 "httpMethod": "POST",
                 "path": "scrape",
-                "responseMode": "responseNode"
+                "responseMode": "lastNode",
+                "options": {}
             },
             "type": "n8n-nodes-base.webhook",
             "typeVersion": 1,
@@ -39,7 +40,7 @@
         },
         {
             "parameters": {
-                "jsCode": "const html = $input.all()[0].json.data;\n// Remove scripts and styles\nlet text = html.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n               .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n// Remove tags\ntext = text.replace(/<[^>]+>/g, '\\n');\n// Normalize whitespace\ntext = text.replace(/\\s+/g, ' ').trim();\n\nreturn [{ json: { data: text } }];"
+                "jsCode": "const html = $input.all()[0].json.data;\n// Remove scripts and styles\nlet text = html.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '')\n               .replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\n// Remove tags\ntext = text.replace(/<[^>]+>/g, '\\n');\n// Normalize whitespace\ntext = text.replace(/\\s+/g, ' ').trim();\n\n// SIMPLE OUTPUT - Ensures n8n returns simple JSON without complex expression nodes\nreturn [{ json: { content: text } }];"
             },
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
@@ -49,21 +50,6 @@
             ],
             "id": "f8e7d3a2-435b-4c6c-b99a-958394c155f4",
             "name": "Code"
-        },
-        {
-            "parameters": {
-                "respondWith": "json",
-                "responseBody": "{ \"content\": \"={{ $json.data }}\" }",
-                "options": {}
-            },
-            "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1,
-            "position": [
-                660,
-                0
-            ],
-            "id": "e2fe31cd-9154-4a45-906f-c27f1a1bb2ab",
-            "name": "Respond to Webhook"
         }
     ],
     "connections": {
@@ -83,17 +69,6 @@
                 [
                     {
                         "node": "Code",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Code": {
-            "main": [
-                [
-                    {
-                        "node": "Respond to Webhook",
                         "type": "main",
                         "index": 0
                     }
