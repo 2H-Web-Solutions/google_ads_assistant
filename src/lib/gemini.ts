@@ -91,15 +91,21 @@ export async function scrapeWebsite(url: string): Promise<string | null> {
         return null;
     }
 
+    // N8N FIX: Ensure URL has protocol
+    let targetUrl = url.trim();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = 'https://' + targetUrl;
+    }
+
     try {
-        console.log(`📡 Sending scraping request to n8n for: ${url}`);
+        console.log(`📡 Sending scraping request to n8n for: ${targetUrl}`);
 
         const response = await fetch(webhookUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ url })
+            body: JSON.stringify({ url: targetUrl })
         });
 
         if (!response.ok) {
