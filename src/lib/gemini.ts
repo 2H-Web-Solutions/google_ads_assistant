@@ -83,10 +83,11 @@ ${prompt}
  * This avoids CORS issues and ensures reliable extraction.
  */
 export async function scrapeWebsite(url: string): Promise<string | null> {
-    const webhookUrl = import.meta.env.VITE_N8N_SCRAPER_URL;
+    // STARTUP CHECK: Try both variable names to be safe against Vercel config mismatches
+    const webhookUrl = import.meta.env.VITE_N8N_SCRAPE_URL || import.meta.env.VITE_N8N_SCRAPER_URL;
 
     if (!webhookUrl) {
-        console.error("⚠️ System Configuration Error: VITE_N8N_SCRAPER_URL is missing in .env");
+        console.error("⚠️ System Configuration Error: Neither VITE_N8N_SCRAPE_URL nor VITE_N8N_SCRAPER_URL is set in .env");
         return null;
     }
 
