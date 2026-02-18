@@ -5,6 +5,7 @@ import { serverTimestamp, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { getAppDoc } from '../lib/db';
 import { analyzeBrand } from '../lib/gemini';
+import CopyableText from './ui/CopyableText';
 
 interface ClientAssistantProps {
     onClose: () => void;
@@ -25,6 +26,25 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
 
     useEffect(scrollToBottom, [messages]);
 
+    const formatMessage = (content: string) => {
+        // Split by triple backticks
+        const parts = content.split(/```/g);
+
+        return parts.map((part, index) => {
+            if (index % 2 === 1) {
+                // Odd indices are code blocks (inside backticks)
+                return <CopyableText key={index} content={part} />;
+            }
+            // Even indices are regular text
+            // Handle newlines in regular text
+            return (
+                <span key={index} className="whitespace-pre-wrap">
+                    {part}
+                </span>
+            );
+        });
+    };
+
     const handleSend = async () => {
         if (!input.trim()) return;
 
@@ -44,7 +64,7 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                 aiResponse = `Great.I'll set up ${userMsg}. What is their website URL? I'll scan it for context.`;
             }
             // 2. User provided Website -> TRIGGER ANALYSIS
-            else if (messages.length === 3) {
+            else if (messages.length >= 3) {
                 const clientName = messages[1].content;
                 const clientUrl = userMsg;
 
@@ -93,13 +113,13 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                         status: 'active'
                     });
 
-                    aiResponse = `Done! I've created the profile for **${clientName}** (ID: ${newClientId}).\n\n**Industry:** ${analysis.industry}\n**Strategy:** ${analysis.suggested_strategy}\n\nRedirecting you to the client dashboard...`;
+                    aiResponse = `Done! I've created the profile for **${clientName}** (ID: ${newClientId}).\n\n**Industry:** ${analysis.industry}\n**Strategy:** ${analysis.suggested_strategy}\n\nHere is a summary you can copy:\n\`\`\`\nClient: ${clientName}\nWebsite: ${clientUrl}\nIndustry: ${analysis.industry}\nStrategy: ${analysis.suggested_strategy}\n\`\`\`\n\nRedirecting you to the client dashboard...`;
 
                     // Navigate after a short delay
                     setTimeout(() => {
                         navigate(`/clients/${newClientId}`);
                         onClose();
-                    }, 3000);
+                    }, 5000);
 
                 } catch (e) {
                     console.error(e);
@@ -146,7 +166,8 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                             ? 'bg-[#101010] text-white rounded-br-none'
                             : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
                             }`}>
-                            {msg.content}
+                            {/* Use formatMessage only for assistant messages to support Copy Box */}
+                            {msg.role === 'assistant' ? formatMessage(msg.content) : msg.content}
                         </div>
                     </div>
                 ))}
