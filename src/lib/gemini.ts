@@ -1,6 +1,6 @@
-// src/lib/gemini.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { BRAIN_RULES, type AgentRole } from "./ai/roles";
+import { getExpertKnowledge } from "./knowledge";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -8,6 +8,34 @@ const genAI = new GoogleGenerativeAI(API_KEY);
 // KONFIGURATION: Wir verwenden strikt das neueste Modell laut Projekt-Vorgaben.
 // STRICT: ONLY USE GEMINI 3 (FLASH OR PRO)
 const MODEL_NAME = "gemini-3-flash-preview";
+
+/**
+ * Holt eine Antwort vom Google Ads Expert (RAG Light).
+ * Lädt automatisch das Wissen aus Firestore und injiziert es in den Kontext.
+ */
+export async function getExpertResponse(prompt: string, userContext: string = ""): Promise<string> {
+    try {
+        // 1. Fetch "Long-Term Memory"
+        const expertKnowledge = await getExpertKnowledge();
+
+        // 2. Combine Context
+        const combinedContext = `
+        ${userContext}
+
+        =============================================
+        CRITICAL KNOWLEDGE BASE (LONG-TERM MEMORY):
+        =============================================
+        ${expertKnowledge}
+        `;
+
+        // 3. Call Gemini with EXPERT role
+        return await getGeminiResponse(prompt, 'EXPERT', combinedContext);
+
+    } catch (error: any) {
+        console.error("Expert Response Failed:", error);
+        return "Entschuldigung, ich kann gerade nicht auf mein Experten-Wissen zugreifen. (Fehler: Knowledge Retrieval)";
+    }
+}
 
 /**
  * Sendet einen Prompt an Gemini mit spezifischen "Brain Rules".

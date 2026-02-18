@@ -1,10 +1,10 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, X } from 'lucide-react';
 import { serverTimestamp, setDoc } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { getAppDoc } from '../lib/db';
-import { analyzeBrand } from '../lib/gemini';
+import { analyzeBrand, getExpertResponse } from '../lib/gemini';
+import { scrapeWebsite } from '../lib/n8n';
 import CopyableText from './ui/CopyableText';
 
 interface ClientAssistantProps {
@@ -15,7 +15,7 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
     const navigate = useNavigate();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Array<{ role: 'user' | 'assistant', content: string }>>([
-        { role: 'assistant', content: "Hello! I'm your Client Onboarding Assistant. What is the name of the new client you'd like to add?" }
+        { role: 'assistant', content: "Hello! I'm your Google Ads Expert & Client Assistant. How can I help?" }
     ]);
     const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,7 +36,6 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                 return <CopyableText key={index} content={part} />;
             }
             // Even indices are regular text
-            // Handle newlines in regular text
             return (
                 <span key={index} className="whitespace-pre-wrap">
                     {part}
@@ -53,96 +52,117 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
         setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
         setLoading(true);
 
-        // TODO: CONNECT TO N8N WEBHOOK HERE
-        // For now, we simulate a simple flow to demonstrate UI
-        // We use setTimeout to decouple state updates slightly, but async/await is main driver
-        setTimeout(async () => {
-            let aiResponse = "I'm processing that...";
-
-            // 1. User provided Name
-            if (messages.length === 1) {
-                aiResponse = `Great.I'll set up ${userMsg}. What is their website URL? I'll scan it for context.`;
+        try {
+            // 0. RESET COMMAND
+            if (userMsg.toLowerCase() === 'reset' || userMsg.toLowerCase() === 'neu') {
+                setMessages([{ role: 'assistant', content: "Google Ads Expert ready. How can I help?" }]);
+                setLoading(false);
+                return;
             }
-            // 2. User provided Website -> TRIGGER ANALYSIS
-            else if (messages.length >= 3) {
-                const clientName = messages[1].content;
+
+            // HEURISTIC: Check context
+            const lastAiMsg = [...messages].reverse().find(m => m.role === 'assistant')?.content || "";
+
+            // ---------------------------------------------------------
+            // SCENARIO A: ONBOARDING FLOW
+            // ---------------------------------------------------------
+            // Trigger onboarding if user asks to "start new client" or similar, 
+            // OR if the AI just asked for details.
+            // For now, we rely on the specific questions from the AI to maintain state.
+
+            // NOTE: To start onboarding, the USER or AI must initiate it. 
+            // If the user says "New Client", the Expert Brain (via RAG) might ask for the name.
+            // We need to catch that. 
+            // But simpler: If we see specific questions, we act.
+
+            const isOnboardingName = lastAiMsg.includes("What is the name of the new client") || lastAiMsg.includes("Wie heißt der neue Kunde");
+            const isOnboardingUrl = lastAiMsg.includes("What is their website URL") || lastAiMsg.includes("Wie lautet die Website");
+
+            if (isOnboardingName) {
+                const aiResponse = `Great. I'll set up **${userMsg}**. What is their website URL?`;
+                setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+                setLoading(false);
+                return;
+            }
+
+            if (isOnboardingUrl) {
+                // Heuristic: Client name was likely the user message BEFORE the URL request.
+                // History: [User: "New Client"], [AI: "Name?"], [User: "Nike"], [AI: "URL?"], [User: "nike.com"]
+                // Index:   0                    1              2               3             4 (current)
+                // We need message at index 2.
+                const clientName = messages[messages.length - 2].content;
                 const clientUrl = userMsg;
 
-                // Helper to generate ID
+                setMessages(prev => [...prev, { role: 'assistant', content: `Scanning ${clientUrl} for ${clientName}...` }]);
+
+                // --- CREATION LOGIC ---
                 const generateClientId = (name: string) => {
                     return name.toLowerCase()
-                        .replace(/\s+/g, '_')     // Replace spaces with underscores
-                        .replace(/[^a-z0-9_]/g, ''); // Remove non-alphanumeric chars
+                        .replace(/\s+/g, '_')
+                        .replace(/[^a-z0-9_]/g, '');
                 };
 
                 const newClientId = generateClientId(clientName);
 
-                aiResponse = `Scanning ${clientUrl} for ${clientName}... This might take a few seconds...`;
-                setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
-
+                // A. Scrape Website Content
+                let scrapedContent = undefined;
                 try {
-                    // A. Scrape Website Content
-                    let scrapedContent = undefined;
-                    try {
-                        // Dynamic import to avoid top-level issues if n8n not fully configured yet
-                        const { scrapeWebsite } = await import('../lib/n8n');
-                        const scrapeResult = await scrapeWebsite(clientUrl);
-                        if (scrapeResult.content) {
-                            scrapedContent = scrapeResult.content;
-                            console.log("Scraped content length:", scrapedContent.length);
-                        }
-                    } catch (scrapeErr) {
-                        console.warn("Scraping failed, falling back to URL-only analysis:", scrapeErr);
+                    const scrapeResult = await scrapeWebsite(clientUrl);
+                    if (scrapeResult && scrapeResult.content) {
+                        scrapedContent = scrapeResult.content;
                     }
-
-                    // B. AI Analysis (with Scraped Data)
-                    const analysis = await analyzeBrand(clientName, clientUrl, scrapedContent);
-
-                    // C. Save to Database (using setDoc with custom ID)
-                    await setDoc(getAppDoc('clients', newClientId), {
-                        name: clientName,
-                        website: clientUrl,
-                        industry: analysis.industry,
-                        description: analysis.description,
-                        audit: {
-                            products: analysis.key_products,
-                            strategy: analysis.suggested_strategy,
-                            lastScanned: serverTimestamp()
-                        },
-                        createdAt: serverTimestamp(),
-                        status: 'active'
-                    });
-
-                    aiResponse = `Done! I've created the profile for **${clientName}** (ID: ${newClientId}).\n\n**Industry:** ${analysis.industry}\n**Strategy:** ${analysis.suggested_strategy}\n\nHere is a summary you can copy:\n\`\`\`\nClient: ${clientName}\nWebsite: ${clientUrl}\nIndustry: ${analysis.industry}\nStrategy: ${analysis.suggested_strategy}\n\`\`\`\n\nRedirecting you to the client dashboard...`;
-
-                    // Navigate after a short delay
-                    setTimeout(() => {
-                        navigate(`/clients/${newClientId}`);
-                        onClose();
-                    }, 5000);
-
-                } catch (e) {
-                    console.error(e);
-                    aiResponse = "I created the client (fallback mode), but the AI analysis failed. Please check the details manually.";
-                    // Fallback creation if AI fails totally
-                    await setDoc(getAppDoc('clients', newClientId), {
-                        name: clientName,
-                        website: clientUrl,
-                        createdAt: serverTimestamp(),
-                        status: 'active',
-                        description: "Manual creation (AI failed)"
-                    });
-                    // Navigate after a delay even on fallback
-                    setTimeout(() => {
-                        navigate(`/clients/${newClientId}`);
-                        onClose();
-                    }, 3000);
+                } catch (scrapeErr) {
+                    console.warn("Scraping failed:", scrapeErr);
                 }
+
+                // B. AI Analysis
+                const analysis = await analyzeBrand(clientName, clientUrl, scrapedContent);
+
+                // C. Save to Database
+                await setDoc(getAppDoc('clients', newClientId), {
+                    name: clientName,
+                    website: clientUrl,
+                    industry: analysis.industry,
+                    description: analysis.description,
+                    audit: {
+                        products: analysis.key_products,
+                        strategy: analysis.suggested_strategy,
+                        lastScanned: serverTimestamp()
+                    },
+                    createdAt: serverTimestamp(),
+                    status: 'active'
+                });
+
+                const successMsg = `Done! I've created the profile for **${clientName}** (ID: ${newClientId}).\n\n**Industry:** ${analysis.industry}\n**Strategy:** ${analysis.suggested_strategy}\n\nHere is a summary you can copy:\n\`\`\`\nClient: ${clientName}\nWebsite: ${clientUrl}\nIndustry: ${analysis.industry}\nStrategy: ${analysis.suggested_strategy}\n\`\`\`\n\nRedirecting you to the client dashboard...`;
+
+                setMessages(prev => [...prev, { role: 'assistant', content: successMsg }]);
+
+                // Navigate after a short delay
+                setTimeout(() => {
+                    navigate(`/clients/${newClientId}`);
+                    onClose();
+                }, 5000);
+
+                setLoading(false);
+                return;
             }
 
-            setMessages(prev => [...prev, { role: 'assistant', content: aiResponse }]);
+            // ---------------------------------------------------------
+            // SCENARIO B: EXPERT CHAT (Default)
+            // ---------------------------------------------------------
+
+            // Build conversation history for context
+            const history = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+            const response = await getExpertResponse(userMsg, `HISTORY:\n${history}`);
+
+            setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+
+        } catch (error) {
+            console.error(error);
+            setMessages(prev => [...prev, { role: 'assistant', content: "System Error: Could not reach the Brain." }]);
+        } finally {
             setLoading(false);
-        }, 100);
+        }
     };
 
     return (
@@ -151,7 +171,7 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
             <div className="p-4 bg-[#101010] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
                     <Bot className="text-[#B7EF02]" size={20} />
-                    <h2 className="font-['Federo'] text-lg">New Client Assistant</h2>
+                    <h2 className="font-['Federo'] text-lg">Google Ads Expert</h2>
                 </div>
                 <button onClick={onClose} className="text-gray-400 hover:text-white">
                     <X size={20} />
@@ -166,7 +186,6 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                             ? 'bg-[#101010] text-white rounded-br-none'
                             : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
                             }`}>
-                            {/* Use formatMessage only for assistant messages to support Copy Box */}
                             {msg.role === 'assistant' ? formatMessage(msg.content) : msg.content}
                         </div>
                     </div>
@@ -183,7 +202,7 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder="Type your message..."
+                        placeholder="Ask me anything..."
                         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#B7EF02] font-['Barlow']"
                     />
                     <button
