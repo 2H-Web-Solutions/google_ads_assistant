@@ -278,7 +278,7 @@ export default function ClientEconomicsSimulator({ clientId, initialData, initia
                             <div className={`text-4xl font-['Federo'] mb-2 ${metrics.netProfit < 0 ? 'text-red-400' : 'text-[#B7EF02]'}`}>
                                 €{metrics.netProfit.toFixed(2)}
                             </div>
-                            <div className="flex gap-4 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-800">
+                            <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-800">
                                 <div>
                                     <span className="block text-gray-400">Revenue</span>
                                     €{metrics.netRevenue.toFixed(2)}
@@ -338,7 +338,7 @@ interface KPICardProps {
 }
 
 const KPICard = ({ label, value, subtext, highlight, color = "text-gray-900" }: KPICardProps) => (
-    <div className={`bg-white border rounded-xl p-4 shadow-sm ${highlight ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+    <div className={`bg-white border rounded-xl p-4 shadow-sm ${highlight ? 'border-red-200 bg-red-50' : 'border-gray-200'} min-w-[140px] flex-1`}>
         <p className="text-xs text-gray-500 uppercase font-bold mb-1">{label}</p>
         <div className={`text-2xl font-['Federo'] ${color}`}>{value}</div>
         {subtext && <p className="text-[10px] text-gray-400 mt-1">{subtext}</p>}

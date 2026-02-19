@@ -10,19 +10,8 @@ import CampaignWorkspace from './pages/CampaignWorkspace';
 import AllCampaigns from './pages/AllCampaigns';
 import Tasks from './pages/Tasks';
 
-// Login Component
-const Login = () => {
-  const { loading } = useAuth();
-  if (loading) return <div>Loading...</div>;
-  return (
-    <div className="h-screen flex items-center justify-center bg-[#101010]">
-      <div className="text-center">
-        <h1 className="text-4xl font-['Federo'] text-[#B7EF02] mb-4">2H ADS</h1>
-        <p className="text-gray-400 font-['Barlow']">Please sign in via Firebase to continue.</p>
-      </div>
-    </div>
-  );
-};
+// Login moved to pages/Login.tsx
+import Login from './pages/Login';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();

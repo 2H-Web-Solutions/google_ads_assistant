@@ -149,7 +149,7 @@ export default function ClientAssistant({ onClose }: ClientAssistantProps) {
     };
 
     return (
-        <div className="fixed inset-y-0 right-0 w-[400px] bg-white shadow-2xl border-l border-gray-200 flex flex-col z-50 transform transition-transform">
+        <div className="fixed inset-y-0 right-0 w-full md:w-[400px] bg-white shadow-2xl border-l border-gray-200 flex flex-col z-50 transform transition-transform">
             {/* Header */}
             <div className="p-4 bg-[#101010] text-white flex justify-between items-center">
                 <div className="flex items-center gap-2">
