@@ -62,7 +62,7 @@ export default function Tasks() {
     const completedTasks = tasks.filter(t => t.status === 'Completed');
 
     return (
-        <div className="h-full">
+        <div className="h-full bg-[#F0F0F3] p-8 -m-8 overflow-y-auto">
             <div className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-3xl font-['Federo'] text-gray-900">Task Manager</h1>

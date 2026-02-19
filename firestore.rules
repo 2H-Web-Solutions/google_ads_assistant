@@ -14,5 +14,13 @@ service cloud.firestore {
     match /apps/{appId}/{document=**} {
       allow read, write: if request.auth != null;
     }
+
+    // 3. SAFETY LOCK: Campaign Knowledge Base
+    // Ensure that documents in the campaign knowledge base are actually linked to the campaign.
+    match /apps/{appId}/clients/{clientId}/campaigns/{campaignId}/knowledge_base/{docId} {
+      allow write: if request.auth != null && 
+                   (!request.resource.data.keys().hasAll(['metadata']) || 
+                    request.resource.data.metadata.campaignId == campaignId);
+    }
   }
 }

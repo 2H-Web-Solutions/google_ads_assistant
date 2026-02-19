@@ -5,6 +5,7 @@ import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc, getDocs, d
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 import { getGeminiResponse } from '../lib/gemini';
 import { GoogleAdsSyncButton } from '../components/campaigns/GoogleAdsSyncButton';
+import { useN8nTrigger } from '../hooks/useN8nTrigger';
 import CampaignMemory from '../components/CampaignMemory';
 import CrossCampaignSelector from '../components/campaigns/CrossCampaignSelector';
 import type { Campaign, Client, CampaignStats, Message } from '../types';
@@ -60,6 +61,7 @@ export default function CampaignWorkspace() {
     const [uploadedImages, setUploadedImages] = useState<{ mimeType: string; data: string; preview: string }[]>([]);
     const [isDragOver, setIsDragOver] = useState(false);
 
+    const { triggerWorkflow } = useN8nTrigger();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -426,7 +428,55 @@ ${performanceReport}
 
             try {
                 // PASS IMAGES TO GEMINI
-                const aiResponse = await getGeminiResponse(fullPrompt, 'ASSISTANT', combinedContext, currentImages.map(img => ({ mimeType: img.mimeType, data: img.data })));
+                let aiResponse = await getGeminiResponse(fullPrompt, 'ASSISTANT', combinedContext, currentImages.map(img => ({ mimeType: img.mimeType, data: img.data })));
+
+                // --- TASK CREATION INTERCEPTION ---
+                // Pattern: ```json { "action": "create_task", ... } ```
+                const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/);
+
+                if (jsonMatch) {
+                    try {
+                        const jsonContent = JSON.parse(jsonMatch[1]);
+                        if (jsonContent.action === 'create_task') {
+
+                            // 1. Create Task in Firestore
+                            await addDoc(getAppCollection('tasks'), {
+                                task: jsonContent.title, // 'task' field matches Tasks.tsx
+                                description: `Created by AI Assistant. Priority: ${jsonContent.priority}`,
+                                priority: jsonContent.priority,
+                                due_date: jsonContent.dueDate || new Date(Date.now() + 86400000).toISOString(),
+                                status: 'Pending',
+                                clientId: clientId, // Context
+                                campaignId: campaignId, // Context
+                                related_client_id: clientId, // For navigation in Tasks.tsx
+                                related_campaign_id: campaignId,
+                                source: 'assistant_chat',
+                                createdAt: serverTimestamp()
+                            });
+
+                            // 2. Trigger n8n Webhook (Sync)
+                            // We use a fire-and-forget approach or handled via the hook if we were inside a component, 
+                            // but here we might need to instantiate the hook logic or just call fetch directly if the hook isn't usable inside this async function easily.
+                            // Actually, we can use the hook at the top level and call its function here.
+                            // See 'const { triggerWorkflow } = useN8nTrigger();' added at top of component.
+                            triggerWorkflow(import.meta.env.VITE_N8N_TASK_WEBHOOK || '', {
+                                ...jsonContent,
+                                clientId,
+                                campaignId,
+                                source: 'assistant_chat'
+                            });
+
+                            // 3. Remove JSON from visible response
+                            aiResponse = aiResponse.replace(jsonMatch[0], '').trim();
+                            aiResponse += `\n\n✅ **Task Created**: ${jsonContent.title}`;
+
+                            // toast.success("Task added to your list!"); // Trigger toast if preferred
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse AI Task JSON", e);
+                    }
+                }
+                // ----------------------------------
 
                 await addDoc(getAppCollection(`sessions/${campaignId}/messages`), {
                     role: 'assistant',

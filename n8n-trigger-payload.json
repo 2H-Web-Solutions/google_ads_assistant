@@ -1,0 +1,11 @@
+{
+    "targetPath": "clients/{{clientId}}/campaigns/{{campaignId}}/knowledge_base",
+    "metadata": {
+        "campaignId": "{{campaignId}}",
+        "clientId": "{{clientId}}",
+        "type": "campaign_strategy"
+    },
+    "content": "{{$json.content}}",
+    "title": "Strategy from n8n",
+    "type": "strategy"
+}

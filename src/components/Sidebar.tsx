@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, LogOut, X } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, X, CheckSquare } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getAuth, signOut } from 'firebase/auth';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +22,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         { name: t('nav.dashboard'), icon: LayoutDashboard, path: '/' },
         { name: t('nav.clients'), icon: Users, path: '/clients' },
         { name: t('nav.campaigns'), icon: Users, path: '/campaigns' },
+        { name: 'Tasks', icon: CheckSquare, path: '/tasks' }, // Manual text until i18n added for 'tasks'
         { name: t('nav.settings'), icon: Settings, path: '/settings' },
     ];
 

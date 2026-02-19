@@ -7,9 +7,10 @@ import { toast } from 'react-hot-toast';
 interface SmartBusinessCardProps {
     clientData: any;
     onUpdate: (data: any) => Promise<void>;
+    campaignId?: string; // [NEW] Context for Strategy Redirection
 }
 
-export default function SmartBusinessCard({ clientData, onUpdate }: SmartBusinessCardProps) {
+export default function SmartBusinessCard({ clientData, onUpdate, campaignId }: SmartBusinessCardProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -44,6 +45,7 @@ export default function SmartBusinessCard({ clientData, onUpdate }: SmartBusines
     const handleSave = async (dataToSave = formData) => {
         setIsSaving(true);
         try {
+            // 1. Update Standard Client Data
             await onUpdate({
                 industry: dataToSave.industry,
                 description: dataToSave.description,
@@ -54,6 +56,29 @@ export default function SmartBusinessCard({ clientData, onUpdate }: SmartBusines
                     strategy: dataToSave.strategy
                 }
             });
+
+            // 2. [NEW] Strategy Redirection to Campaign KB
+            // If this component is used in a Campaign Context (campaignId provided via props or context - handled via parent passing logic if needed, 
+            // but for now we follow the user rule: "If data type is strategy... Write to .../campaigns/{campaignId}/knowledge_base")
+            // Since props.campaignId isn't here yet, we'll check if clientData has a transient campaignId attached or if we should add the prop.
+            // The prompt "Redirect all campaign-specific data..." suggests we should enable this.
+            // I will add an optional prop `campaignId` to the interface.
+
+            if (campaignId && dataToSave.strategy && dataToSave.strategy !== clientData.audit?.strategy) {
+                const { addDoc, serverTimestamp } = await import('firebase/firestore');
+                const { getAppCollection } = await import('../../lib/db');
+
+                await addDoc(getAppCollection(`clients/${clientData.id}/campaigns/${campaignId}/knowledge_base`), {
+                    type: 'strategy',
+                    title: 'Updated Business Strategy',
+                    content: dataToSave.strategy,
+                    source: 'SmartBusinessCard',
+                    createdAt: serverTimestamp(),
+                    metadata: { campaignId: campaignId }
+                });
+                toast.success("Strategy saved to Campaign Knowledge Base.");
+            }
+
             toast.success("Business Profile updated!");
             setIsEditing(false);
             setShowReviewModal(false);

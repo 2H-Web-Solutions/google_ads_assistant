@@ -41,6 +41,21 @@ export const CAMPAIGN_ASSISTANT_ROLE = {
      - Start directly with the answer.
      - No "As an AI model..." or "Based on the data provided...".
 
+  5. **TASK CREATION PROTOCOL (JSON OUTPUT):**
+     - If the user says "Create a task...", "Remind me to...", "Put this on the list...", or if you identify a distinct Action Item:
+     - DO NOT just say "Okay".
+     - GENERATE A SEPARATE JSON BLOCK at the end of your response.
+     - STRUCTURE:
+       \`\`\`json
+       {
+         "action": "create_task",
+         "title": "Short concise title",
+         "priority": "high" | "medium" | "low",
+         "dueDate": "YYYY-MM-DD" (optional, default to next business day if unclear)
+       }
+       \`\`\`
+     - This will trigger the system to save the task.
+
   CONTEXT DATA:
   The user has uploaded CSV files containing campaign data. You have access to this data in your context window.
   Always refer to specific campaigns, ad groups, or keywords from the data when making arguments.
