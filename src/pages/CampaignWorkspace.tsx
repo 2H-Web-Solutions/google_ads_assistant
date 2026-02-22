@@ -37,6 +37,7 @@ export default function CampaignWorkspace() {
 
     // AI Mode State
     const [activeMode, setActiveMode] = useState<'ANALYSE' | 'UMSETZUNG'>('ANALYSE');
+    const lastUsedMode = useRef<'ANALYSE' | 'UMSETZUNG'>('ANALYSE');
 
     const { triggerWorkflow } = useN8nTrigger();
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -421,8 +422,17 @@ ${performanceReport}
                 combinedContext += `\n\n--- CROSS-CAMPAIGN KNOWLEDGE START ---\n${crossCampaignContext}\n--- CROSS-CAMPAIGN KNOWLEDGE END ---\nUse this knowledge to answer the current request if relevant.`;
             }
 
+            // --- EXPLICIT MODE SWITCH DIRECTIVE ---
+            let modeSwitchInstruction = "";
+            if (activeMode === 'UMSETZUNG' && lastUsedMode.current === 'ANALYSE') {
+                modeSwitchInstruction = "HINWEIS: Wir wechseln jetzt in den UMSETZUNGS-MODUS. Ignoriere die rein strategische Zurückhaltung der vorherigen Nachrichten und liefere jetzt konkrete Assets in <copy_block> Format.\n\n";
+            } else if (activeMode === 'ANALYSE' && lastUsedMode.current === 'UMSETZUNG') {
+                modeSwitchInstruction = "HINWEIS: Wir wechseln zurück in den ANALYSE-MODUS. Stoppe die Asset-Erstellung und konzentriere dich wieder auf Daten-Insights und Strategie.\n\n";
+            }
+            lastUsedMode.current = activeMode; // Update ref after recording the switch
+
             const historyText = messages.map(m => `${m.role === 'assistant' ? 'AI' : 'User'}: ${m.content}`).join('\n');
-            const fullPrompt = `Chat History:\n${historyText}\nUser: ${userText}`;
+            const fullPrompt = `Chat History:\n${historyText}\nUser: ${modeSwitchInstruction}${userText}`;
 
             try {
                 // PASS IMAGES TO GEMINI
