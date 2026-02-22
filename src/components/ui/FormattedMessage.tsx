@@ -26,8 +26,24 @@ export const FormattedMessage: React.FC<FormattedMessageProps> = ({ text, isUser
                         return (
                             <div key={index} className="space-y-2 my-2">
                                 {items.map((item, idx) => {
-                                    const cleanText = item.replace(/<\/?item>/g, '').trim();
-                                    return <CopyTile key={idx} content={cleanText} />;
+                                    const rawText = item.replace(/<\/?item>/g, '').trim();
+
+                                    let label = undefined;
+                                    let content = rawText;
+
+                                    // Detect metadata prefixes like "Headline 1:", "Beschreibung:"
+                                    const match = rawText.match(/^([^:]{2,35}):\s*(.+)/);
+                                    if (match) {
+                                        const possibleLabel = match[1].trim();
+                                        const isMetadataLabel = /headline|titel|desc|beschreibung|sitelink|callout|cta|text|asset/i.test(possibleLabel);
+
+                                        if (isMetadataLabel) {
+                                            label = possibleLabel;
+                                            content = match[2].trim();
+                                        }
+                                    }
+
+                                    return <CopyTile key={idx} label={label} content={content} />;
                                 })}
                             </div>
                         );

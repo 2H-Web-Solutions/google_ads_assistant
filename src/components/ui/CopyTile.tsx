@@ -3,10 +3,11 @@ import { Copy, Check } from 'lucide-react';
 import copy from 'copy-to-clipboard';
 
 interface CopyTileProps {
+    label?: string;
     content: string;
 }
 
-export const CopyTile: React.FC<CopyTileProps> = ({ content }) => {
+export const CopyTile: React.FC<CopyTileProps> = ({ label, content }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
@@ -28,9 +29,10 @@ export const CopyTile: React.FC<CopyTileProps> = ({ content }) => {
             onClick={handleCopy}
             title={copied ? "Kopiert!" : "Klicken zum Kopieren"}
         >
-            <span className="text-sm text-gray-800 font-['Barlow'] pr-8 break-words whitespace-pre-wrap w-full">
-                {content}
-            </span>
+            <div className="text-sm text-gray-800 font-['Barlow'] pr-8 w-full flex flex-col md:flex-row md:items-start md:gap-2">
+                {label && <span className="font-semibold text-gray-400 shrink-0">{label}:</span>}
+                <span className="break-words whitespace-pre-wrap">{content}</span>
+            </div>
 
             <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[#B7EF02] opacity-70 group-hover:opacity-100 transition-opacity">
                 {copied ? <Check size={18} /> : <Copy size={18} />}
