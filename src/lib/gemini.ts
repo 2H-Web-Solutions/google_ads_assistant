@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { BRAIN_RULES, type AgentRole } from "./ai/roles";
-import { getExpertKnowledge } from "./knowledge";
+import { getExpertKnowledge } from "./ai/knowledge";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -12,19 +12,22 @@ const MODEL_NAME = "gemini-3-flash-preview";
 const OUTPUT_FORMAT_INSTRUCTION = `
 ####### OUTPUT FORMAT RULES (CRITICAL) #######
 - Für Google Ads Assets (Headlines, Descriptions, Keywords):
-  Nutze für JEDES EINZELNE Element einen separaten Code-Block (Triple-Backticks).
-  NIEMALS mehrere Assets in einen Block schreiben.
+  Nutze für JEDES EINZELNE kopierbare Element (Headline, Text, Call-to-Action) zwingend das folgende XML-Format.
+  NIEMALS mehrere Assets in einen Block schreiben. NIEMALS Markdown Code-Blöcke (\`\`\`) verwenden.
   
   RICHTIG:
-  Hier sind deine Headlines:
-  \`\`\`Headline 1\`\`\`
-  \`\`\`Headline 2\`\`\`
+  <copy_block>
+  <item>Headline 1: Ihr lokaler Experte</item>
+  <item>Headline 2: Jetzt Termin vereinbaren</item>
+  </copy_block>
   
-  FALSCH:
+  FALSCH (VERBOTEN):
   \`\`\`
   Headline 1
   Headline 2
   \`\`\`
+  
+  Das System *bricht*, wenn du keine <copy_block> und <item> Tags verwendest!
 ##############################################
 `;
 // ... (rest of file)
