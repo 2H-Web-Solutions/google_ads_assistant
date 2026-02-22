@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send, Brain, Archive, Pencil, Check, X, Trash2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Send, Brain, Archive, Pencil, Check, X, Trash2, Image as ImageIcon, Search, Rocket } from 'lucide-react';
 import { onSnapshot, addDoc, query, orderBy, serverTimestamp, setDoc, getDocs, deleteDoc, updateDoc, where, limit } from 'firebase/firestore';
 import { getAppDoc, getAppCollection, APP_ID } from '../lib/db';
 import { getGeminiResponse } from '../lib/gemini';
@@ -34,6 +34,9 @@ export default function CampaignWorkspace() {
     // Image Upload State
     const [uploadedImages, setUploadedImages] = useState<{ mimeType: string; data: string; preview: string }[]>([]);
     const [isDragOver, setIsDragOver] = useState(false);
+
+    // AI Mode State
+    const [activeMode, setActiveMode] = useState<'ANALYSE' | 'UMSETZUNG'>('ANALYSE');
 
     const { triggerWorkflow } = useN8nTrigger();
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -403,7 +406,8 @@ Analysiere Trends in den dailyStats. Achte auf Ausreißer beim CPC oder Conversi
 
             // Combine: Client Context + Live Data + Economics + Base Context + Knowledge Base + Cross-Campaign Selection
             // SYSTEM: FULL CONTEXT ENFORCED - NO TRUNCATION
-            let combinedContext = `${clientContext}\n${liveContextInjection}\n${economicsContext}\n${baseContext}\n\n${contextString}`;
+            const modeInstruction = `### AKTUELLER ARBEITS-MODUS: ${activeMode} ###\n`;
+            let combinedContext = `${modeInstruction}\n${clientContext}\n${liveContextInjection}\n${economicsContext}\n${baseContext}\n\n${contextString}`;
 
             if (performanceReport) {
                 combinedContext += `
@@ -578,29 +582,53 @@ ${performanceReport}
                             </div>
                         </div>
                     </div>
-                    <div className="flex gap-2">
-                        <GoogleAdsSyncButton clientId={clientId!} campaignId={campaignId} />
-                        <button
-                            onClick={handleSmartArchive}
-                            className="p-2 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-[#B7EF02] transition-colors"
-                            title="Smart Archive (Save & Clear)"
-                        >
-                            <Archive size={20} />
-                        </button>
-                        <button
-                            onClick={handleWipeChat}
-                            className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
-                            title="Wipe Chat (No Save)"
-                        >
-                            <Trash2 size={20} />
-                        </button>
-                        <button
-                            onClick={() => setShowMemory(!showMemory)}
-                            className={`p-2 rounded-lg transition-colors ${showMemory ? 'bg-[#B7EF02] text-black' : 'hover:bg-gray-200 text-gray-500'}`}
-                            title="View Memory Base"
-                        >
-                            <Brain size={20} />
-                        </button>
+                    <div className="flex items-center gap-4">
+                        {/* AI Mode Toggle */}
+                        <div className="flex bg-gray-100 rounded-lg p-1">
+                            <button
+                                onClick={() => setActiveMode('ANALYSE')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeMode === 'ANALYSE' ? 'bg-white shadow-sm text-gray-900 ring-1 ring-[#B7EF02]' : 'text-gray-500 hover:text-gray-700'}`}
+                                title="Analyse-Modus (Strategie & Diagnose)"
+                            >
+                                <Search size={16} className={activeMode === 'ANALYSE' ? 'text-[#B7EF02]' : ''} />
+                                Analyse
+                            </button>
+                            <button
+                                onClick={() => setActiveMode('UMSETZUNG')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${activeMode === 'UMSETZUNG' ? 'bg-white shadow-sm text-gray-900 ring-1 ring-[#B7EF02]' : 'text-gray-500 hover:text-gray-700'}`}
+                                title="Umsetzungs-Modus (Texte & Assets kreieren)"
+                            >
+                                <Rocket size={16} className={activeMode === 'UMSETZUNG' ? 'text-[#B7EF02]' : ''} />
+                                Umsetzung
+                            </button>
+                        </div>
+
+                        <div className="w-px h-8 bg-gray-200 mx-2"></div>
+
+                        <div className="flex gap-2">
+                            <GoogleAdsSyncButton clientId={clientId!} campaignId={campaignId} />
+                            <button
+                                onClick={handleSmartArchive}
+                                className="p-2 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-[#B7EF02] transition-colors"
+                                title="Smart Archive (Save & Clear)"
+                            >
+                                <Archive size={20} />
+                            </button>
+                            <button
+                                onClick={handleWipeChat}
+                                className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors"
+                                title="Wipe Chat (No Save)"
+                            >
+                                <Trash2 size={20} />
+                            </button>
+                            <button
+                                onClick={() => setShowMemory(!showMemory)}
+                                className={`p-2 rounded-lg transition-colors ${showMemory ? 'bg-[#B7EF02] text-black' : 'hover:bg-gray-200 text-gray-500'}`}
+                                title="View Memory Base"
+                            >
+                                <Brain size={20} />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
